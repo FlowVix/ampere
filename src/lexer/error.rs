@@ -4,3 +4,12 @@ pub enum LexerError {
     UnterminatedString,
     // UnknownEscape(char),
 }
+
+impl LexerError {
+    pub fn msg(&self) -> String {
+        match self {
+            LexerError::UnknownChar(c) => format!("Unknown character `{}`", c),
+            LexerError::UnterminatedString => "Unterminated string".into(),
+        }
+    }
+}

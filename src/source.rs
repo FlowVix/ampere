@@ -53,6 +53,11 @@ impl AmpereSource {
             }
         }
     }
+    pub fn name(&self) -> String {
+        match self {
+            AmpereSource::File(path) => path.to_str().unwrap().into(),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -63,13 +68,6 @@ pub struct CodeArea {
 
 impl Debug for CodeArea {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "<{} @ {:?}>",
-            match &*self.src {
-                AmpereSource::File(path) => path.to_str().unwrap(),
-            },
-            self.span
-        )
+        write!(f, "<{} @ {:?}>", self.src.name(), self.span)
     }
 }
