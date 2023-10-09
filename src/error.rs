@@ -1,68 +1,90 @@
+use ahash::AHashMap;
 use colored::Colorize;
-use itertools::Itertools;
+use lyneate::Report;
 
-use crate::source::{CodeArea, CodeSpan};
+use crate::{
+    source::{CodeArea, CodeSpan},
+    util::hsv_to_rgb,
+};
 
-pub struct ErrorDisplay {
-    pub typ: &'static str,
-    pub msg: String,
-    pub area: CodeArea,
+#[derive(Debug, Clone, Copy)]
+pub struct RainbowColorGenerator {
+    h: f64,
+    s: f64,
+    v: f64,
+    hue_shift: f64,
 }
 
-impl ErrorDisplay {
+impl RainbowColorGenerator {
+    pub fn new(h: f64, s: f64, v: f64, hue_shift: f64) -> Self {
+        Self { h, s, v, hue_shift }
+    }
+
+    pub fn next(&mut self) -> (u8, u8, u8) {
+        let h0 = self.h / 360.0;
+
+        self.h = (self.h + self.hue_shift).rem_euclid(360.0);
+
+        hsv_to_rgb(h0, self.s, self.v)
+    }
+}
+
+pub struct ErrorReport {
+    pub typ: &'static str,
+    pub msg: &'static str,
+
+    pub labels: Vec<(CodeArea, String)>,
+}
+
+impl ErrorReport {
     pub fn display(self) {
         println!(
-            "\n{}: {}",
+            "\n{}{} {}\n",
             self.typ.bright_red().bold(),
+            ":".bright_red().bold(),
             self.msg.bright_yellow()
         );
-        println!("{} {}", "in".dimmed(), self.area.src.name().bright_blue());
+        let mut src_map = AHashMap::default();
 
-        let code = self.area.src.read();
-        let lines = code.split_inclusive('\n').collect_vec();
-
-        let calc_len = |n: usize| lines.iter().take(n).map(|l| l.len()).sum::<usize>();
-
-        // println!("{:?}", lines);
-
-        let mut pre_lines = 0;
-        while calc_len(pre_lines) <= self.area.span.start {
-            pre_lines += 1;
-        }
-        let mut line_count = 1;
-        while calc_len(pre_lines + line_count - 1) < self.area.span.end {
-            line_count += 1;
-        }
-        let new_start = calc_len(pre_lines - 1);
-        let snippet = &code[new_start..calc_len(pre_lines + line_count - 1)].trim_end();
-
-        let new_span = CodeSpan {
-            start: self.area.span.start - new_start,
-            end: self.area.span.end - new_start,
-        };
-
-        println!();
-        for (l, s) in snippet.lines().enumerate() {
-            println!(" {}    ", (pre_lines + l).to_string().dimmed())
+        for (area, msg) in self.labels {
+            src_map
+                .entry(area.src.name())
+                .or_insert_with(|| (area.src.read(), vec![]))
+                .1
+                .push((area.span, msg));
         }
 
-        println!(
-            "\n{}{}{}",
-            &snippet[..new_span.start].dimmed(),
-            snippet[new_span.start..new_span.end]
-                .bright_red()
-                .underline(),
-            snippet[new_span.end..].dimmed()
-        );
+        let mut colors = RainbowColorGenerator::new(345.0, 0.75, 1.0, 45.0);
 
-        // println!(
-        //     "hhh {}:{} {}:{} {:?}\n({})",
-        //     pre_lines,
-        //     calc_len(pre_lines - 1),
-        //     line_count,
-        //     calc_len(pre_lines + line_count - 1),
-        //     new_span,
-        //     snippet.underline()
-        // );
+        for (src, (code, labels)) in src_map {
+            Report::new_byte_spanned(
+                &code,
+                labels.into_iter().map(|(span, msg)| {
+                    (
+                        span.into(),
+                        msg.truecolor(150, 150, 150).to_string(),
+                        colors.next(),
+                    )
+                }),
+            )
+            .display();
+            println!();
+        }
     }
+}
+
+#[macro_export]
+macro_rules! special_fmt {
+    ($fmt:literal, $($arg:expr),* $(,)?) => {
+        {
+            use colored::Colorize;
+
+            format!(
+                $fmt,
+                $(
+                    format!("{}", $arg).bright_white(),
+                )*
+            )
+        }
+    };
 }

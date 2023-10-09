@@ -1,7 +1,8 @@
 use crate::{
-    error::ErrorDisplay,
+    error::ErrorReport,
     lexer::{error::LexerError, tokens::Token},
     source::CodeArea,
+    special_fmt,
 };
 
 #[derive(Debug, Clone)]
@@ -17,38 +18,29 @@ pub enum ParserError {
     },
 }
 
-impl From<ParserError> for ErrorDisplay {
-    fn from(value: ParserError) -> Self {
-        const TYP: &str = "Parsing Error";
-
-        let (msg, area) = match value {
+impl ParserError {
+    pub fn into_report(self) -> ErrorReport {
+        let (msg, labels) = match self {
             ParserError::LexingError { error, area } => {
-                return ErrorDisplay {
-                    typ: "Lexing Error",
-                    msg: error.msg(),
-                    area,
-                }
+                ("Error during lexing", vec![(area, error.msg())])
             }
             ParserError::UnexpectedToken {
                 expected,
                 found,
                 area,
             } => (
-                format!("Expected {}, found {}", expected, found.to_str()),
-                area,
+                "Unexpected token",
+                vec![(
+                    area,
+                    special_fmt!("Expected {}, found `{}`", expected, found.to_str()),
+                )],
             ),
         };
 
-        ErrorDisplay {
-            typ: TYP,
+        ErrorReport {
+            typ: "Parser Error",
             msg,
-            area,
+            labels,
         }
     }
 }
-
-// impl From<LexerError> for ParserError {
-//     fn from(value: LexerError) -> Self {
-//         Self::LexingError(value)
-//     }
-// }
