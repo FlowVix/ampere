@@ -15,6 +15,10 @@ impl CodeSpan {
             end: other.end,
         }
     }
+
+    pub fn into_area(self, src: Rc<AmpereSource>) -> CodeArea {
+        CodeArea { span: self, src }
+    }
 }
 
 impl Debug for CodeSpan {

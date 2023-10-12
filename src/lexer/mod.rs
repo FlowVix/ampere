@@ -113,6 +113,7 @@ impl<'a> Lexer<'a> {
             Some('{') => Ok(Some(Token::OpenBracket)),
             Some('}') => Ok(Some(Token::ClosedBracket)),
             Some(';') => Ok(Some(Token::Semicolon)),
+            Some('.') => Ok(Some(Token::Period)),
 
             Some('=') => match self.peek_char() {
                 Some('=') => {
@@ -175,6 +176,7 @@ impl<'a> Lexer<'a> {
                         "else" => Token::Else,
                         "while" => Token::While,
                         "for" => Token::For,
+                        "let" => Token::Let,
                         _ => Token::Identifier,
                     }));
                 }
@@ -204,6 +206,7 @@ impl<'a> Lexer<'a> {
         self.span.start = self.span.end;
         let out = self.next_token();
         self.update_span();
+        // println!("-> {:?} {:?}", out, self.span);
         out
     }
 }

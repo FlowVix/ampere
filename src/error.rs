@@ -1,6 +1,6 @@
 use ahash::AHashMap;
 use colored::Colorize;
-use lyneate::Report;
+use lyneate::{Report, Theme, ThemeChars};
 
 use crate::{
     source::{CodeArea, CodeSpan},
@@ -39,10 +39,10 @@ pub struct ErrorReport {
 impl ErrorReport {
     pub fn display(self) {
         println!(
-            "\n{}{} {}\n",
-            self.typ.bright_red().bold(),
-            ":".bright_red().bold(),
-            self.msg.bright_yellow()
+            "\n{}: {}",
+            self.typ.truecolor(255, 72, 72).bold(),
+            // ":".bright_red().bold(),
+            self.msg
         );
         let mut src_map = AHashMap::default();
 
@@ -55,8 +55,16 @@ impl ErrorReport {
         }
 
         let mut colors = RainbowColorGenerator::new(345.0, 0.75, 1.0, 45.0);
+        let theme = Theme {
+            chars: ThemeChars {
+                side_vertical_dotted: '·',
+                ..Default::default()
+            },
+            ..Default::default()
+        };
 
         for (src, (code, labels)) in src_map {
+            println!("[{}]\n", src.truecolor(123, 184, 255));
             Report::new_byte_spanned(
                 &code,
                 labels.into_iter().map(|(span, msg)| {
@@ -67,6 +75,7 @@ impl ErrorReport {
                     )
                 }),
             )
+            .with_theme(theme)
             .display();
             println!();
         }

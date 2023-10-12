@@ -62,12 +62,16 @@ tokens! {
     OpenBracket: "{",
     ClosedBracket: "}",
 
+
     If: "if",
     Else: "else",
     While: "while",
     For: "for",
 
+    Let: "let",
+
     Semicolon: ";",
+    Period: ".",
 
     Eof: "end of file",
 }

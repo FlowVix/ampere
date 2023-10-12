@@ -6,6 +6,7 @@ use lexer::Lexer;
 use parser::Parser;
 
 mod error;
+mod interpreter;
 mod lexer;
 mod parser;
 mod source;
@@ -18,7 +19,7 @@ fn main() {
     let lexer = Lexer::new(&code);
     let mut parser = Parser::new(lexer, Rc::new(src));
 
-    match parser.parse_expr() {
+    match parser.parse() {
         Ok(v) => println!("{}", format!("{:#?}", v).bright_green().bold()),
         Err(err) => {
             err.into_report().display();

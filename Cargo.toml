@@ -12,3 +12,4 @@ slab = "0.4.9"
 serde = { version = "1.0.188", features = ["serde_derive"] }
 lyneate = "0.2.0"
 ahash = "0.8.3"
+derive_more = "0.99.17"

@@ -32,7 +32,7 @@ impl ParserError {
                 "Unexpected token",
                 vec![(
                     area,
-                    special_fmt!("Expected {}, found `{}`", expected, found.to_str()),
+                    special_fmt!("Expected `{}`, found `{}`", expected, found.to_str()),
                 )],
             ),
         };

@@ -1,4 +1,4 @@
-mod ast;
+pub mod ast;
 pub mod error;
 mod operators;
 
@@ -10,7 +10,7 @@ use crate::{
 };
 
 use self::{
-    ast::{ExprNode, ExprType},
+    ast::{ExprNode, ExprType, StmtNode, StmtType, Stmts},
     error::ParserError,
     operators::unary_prec,
 };
@@ -152,7 +152,39 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_value(&mut self) -> Result<ExprNode, ParserError> {
-        self.parse_unit()
+        let mut out = self.parse_unit()?;
+        loop {
+            let prev_span = out.span;
+            let typ = match self.peek()? {
+                Token::OpenSqBracket => {
+                    self.next()?;
+                    let index = self.parse_expr()?;
+                    println!("---");
+                    self.expect_tok(Token::ClosedSqBracket)?;
+
+                    ExprType::Index {
+                        base: Box::new(out),
+                        index: Box::new(index),
+                    }
+                }
+                Token::Period => {
+                    self.next()?;
+                    self.expect_tok(Token::Identifier)?;
+                    let member = self.slice();
+
+                    ExprType::Member {
+                        base: Box::new(out),
+                        member: member.into(),
+                    }
+                }
+                _ => break,
+            };
+            out = ExprNode {
+                typ,
+                span: prev_span.extended(self.span()),
+            }
+        }
+        Ok(out)
     }
 
     pub fn parse_expr(&mut self) -> Result<ExprNode, ParserError> {
@@ -185,5 +217,47 @@ impl<'a> Parser<'a> {
             }
         }
         Ok(left)
+    }
+
+    pub fn parse_stmt(&mut self) -> Result<StmtNode, ParserError> {
+        let start = self.span();
+
+        let typ = match self.peek()? {
+            Token::Let => {
+                self.next()?;
+                self.expect_tok(Token::Identifier)?;
+                let name = self.slice().to_string();
+                self.expect_tok(Token::Assign)?;
+                let expr = self.parse_expr()?;
+                StmtType::Let(name, expr)
+            }
+            _ => StmtType::Expr(self.parse_expr()?),
+        };
+
+        Ok(StmtNode {
+            typ,
+            span: start.extended(self.span()),
+        })
+    }
+
+    pub fn parse_stmts(&mut self) -> Result<Stmts, ParserError> {
+        let mut list = vec![];
+
+        while !matches!(self.peek()?, Token::ClosedBracket | Token::Eof) {
+            let stmt = self.parse_stmt()?;
+            if self.skip_tok(Token::Semicolon)? {
+                list.push(stmt);
+            } else {
+                return Ok(Stmts::Ret(list, stmt));
+            }
+        }
+
+        Ok(Stmts::Normal(list))
+    }
+
+    pub fn parse(&mut self) -> Result<Stmts, ParserError> {
+        let out = self.parse_stmts()?;
+        self.expect_tok(Token::Eof)?;
+        Ok(out)
     }
 }
