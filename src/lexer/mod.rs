@@ -114,6 +114,7 @@ impl<'a> Lexer<'a> {
             Some('}') => Ok(Some(Token::ClosedBracket)),
             Some(';') => Ok(Some(Token::Semicolon)),
             Some('.') => Ok(Some(Token::Period)),
+            Some(',') => Ok(Some(Token::Comma)),
 
             Some('=') => match self.peek_char() {
                 Some('=') => {

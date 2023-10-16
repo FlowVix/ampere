@@ -1,6 +1,6 @@
 pub mod ast;
 pub mod error;
-mod operators;
+pub mod operators;
 
 use std::rc::Rc;
 
@@ -15,13 +15,37 @@ use self::{
     operators::unary_prec,
 };
 
+macro_rules! list_helper {
+    ($self:ident, $closing_tok:ident $code:block) => {
+        while !$self.next_is(Token::$closing_tok)? {
+            $code;
+            if !$self.skip_tok(Token::Comma)? {
+                break;
+            }
+        }
+        $self.expect_tok(Token::$closing_tok)?;
+    };
+
+    ($self:ident, $first:ident, $closing_tok:ident $code:block) => {
+        let mut $first = true;
+        while !$self.next_is(Token::$closing_tok)? {
+            $code;
+            $first = false;
+            if !$self.skip_tok(Token::Comma)? {
+                break;
+            }
+        }
+        $self.expect_tok(Token::$closing_tok)?;
+    };
+}
+
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
-    src: Rc<AmpereSource>,
+    src: &'a Rc<AmpereSource>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a>, src: Rc<AmpereSource>) -> Self {
+    pub fn new(lexer: Lexer<'a>, src: &'a Rc<AmpereSource>) -> Self {
         Self { lexer, src }
     }
 
@@ -119,8 +143,25 @@ impl<'a> Parser<'a> {
 
                 Token::OpenParen => {
                     let inner = self.parse_expr()?;
-                    self.expect_tok(Token::ClosedParen)?;
-                    inner.typ
+                    if self.skip_tok(Token::Comma)? {
+                        let mut out = vec![inner];
+                        if !self.skip_tok(Token::ClosedParen)? {
+                            list_helper! {self, ClosedParen {
+                                out.push(self.parse_expr()?);
+                            }}
+                        }
+                        ExprType::Tuple(out)
+                    } else {
+                        self.expect_tok(Token::ClosedParen)?;
+                        inner.typ
+                    }
+                }
+                Token::OpenSqBracket => {
+                    let mut out = vec![];
+                    list_helper! {self, ClosedSqBracket {
+                        out.push(self.parse_expr()?);
+                    }}
+                    ExprType::Array(out)
                 }
 
                 unary_op
@@ -159,7 +200,6 @@ impl<'a> Parser<'a> {
                 Token::OpenSqBracket => {
                     self.next()?;
                     let index = self.parse_expr()?;
-                    println!("---");
                     self.expect_tok(Token::ClosedSqBracket)?;
 
                     ExprType::Index {

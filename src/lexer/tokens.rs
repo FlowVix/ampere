@@ -72,6 +72,7 @@ tokens! {
 
     Semicolon: ";",
     Period: ".",
+    Comma: ",",
 
     Eof: "end of file",
 }

@@ -28,6 +28,9 @@ pub enum ExprType {
         base: Box<ExprNode>,
         member: String,
     },
+
+    Array(Vec<ExprNode>),
+    Tuple(Vec<ExprNode>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
