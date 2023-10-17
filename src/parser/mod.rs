@@ -10,7 +10,10 @@ use crate::{
 };
 
 use self::{
-    ast::{ExprNode, ExprType, StmtNode, StmtType, Stmts},
+    ast::{
+        AssignPath, AssignPatternNode, AssignPatternType, ExprNode, ExprType, LetPatternNode,
+        LetPatternType, StmtNode, StmtType, Stmts,
+    },
     error::ParserError,
     operators::unary_prec,
 };
@@ -39,6 +42,7 @@ macro_rules! list_helper {
     };
 }
 
+#[derive(Clone)]
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     src: &'a Rc<AmpereSource>,
@@ -114,6 +118,101 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    pub fn parse_let_pattern(&mut self) -> Result<LetPatternNode, ParserError> {
+        let t = self.next()?;
+        let start = self.span();
+        Ok(LetPatternNode {
+            typ: match t {
+                Token::Identifier => {
+                    let name = self.slice().to_string();
+                    LetPatternType::Var(name)
+                }
+                Token::OpenSqBracket => {
+                    let mut out = vec![];
+                    list_helper! {self, ClosedSqBracket {
+                        out.push(self.parse_let_pattern()?);
+                    }}
+                    LetPatternType::ArrayDestructure(out)
+                }
+                Token::OpenParen => {
+                    let mut out = vec![];
+                    list_helper! {self, ClosedParen {
+                        out.push(self.parse_let_pattern()?);
+                    }}
+                    LetPatternType::TupleDestructure(out)
+                }
+                t => {
+                    return Err(ParserError::UnexpectedToken {
+                        expected: "pattern",
+                        found: t,
+                        area: self.make_area(self.span()),
+                    })
+                }
+            },
+            span: start.extended(self.span()),
+        })
+    }
+    pub fn parse_assign_pattern(&mut self) -> Result<AssignPatternNode, ParserError> {
+        let t = self.next()?;
+        let start = self.span();
+        Ok(AssignPatternNode {
+            typ: match t {
+                Token::Identifier => {
+                    let name = self.slice().to_string();
+                    let mut path = vec![];
+
+                    let mut out_span = start.extended(self.span());
+
+                    loop {
+                        match self.peek()? {
+                            Token::OpenSqBracket => {
+                                self.next()?;
+                                let index = self.parse_expr()?;
+                                self.expect_tok(Token::ClosedSqBracket)?;
+
+                                path.push(AssignPath::Index(index));
+                            }
+                            Token::Period => {
+                                self.next()?;
+                                self.expect_tok(Token::Identifier)?;
+                                let member = self.slice();
+                                path.push(AssignPath::Member(member.into()));
+                            }
+                            _ => break,
+                        };
+                        out_span = out_span.extended(self.span());
+                    }
+                    return Ok(AssignPatternNode {
+                        typ: AssignPatternType::Path { var: name, path },
+                        span: out_span,
+                    });
+                }
+                Token::OpenSqBracket => {
+                    let mut out = vec![];
+                    list_helper! {self, ClosedSqBracket {
+                        out.push(self.parse_assign_pattern()?);
+                    }}
+                    AssignPatternType::ArrayDestructure(out)
+                }
+                Token::OpenParen => {
+                    let mut out = vec![];
+                    list_helper! {self, ClosedParen {
+                        out.push(self.parse_assign_pattern()?);
+                    }}
+                    AssignPatternType::ArrayDestructure(out)
+                }
+                t => {
+                    return Err(ParserError::UnexpectedToken {
+                        expected: "pattern",
+                        found: t,
+                        area: self.make_area(self.span()),
+                    })
+                }
+            },
+            span: start.extended(self.span()),
+        })
+    }
+
     pub fn parse_unit(&mut self) -> Result<ExprNode, ParserError> {
         let t = self.next()?;
         let start = self.span();
@@ -162,6 +261,30 @@ impl<'a> Parser<'a> {
                         out.push(self.parse_expr()?);
                     }}
                     ExprType::Array(out)
+                }
+                Token::OpenBracket => {
+                    let out = self.parse_stmts()?;
+                    self.expect_tok(Token::ClosedBracket)?;
+                    ExprType::Block(Box::new(out))
+                }
+                Token::If => {
+                    let cond = Box::new(self.parse_expr()?);
+                    let then = Box::new(self.parse_expr()?);
+                    let otherwise = if self.skip_tok(Token::Else)? {
+                        Some(Box::new(self.parse_expr()?))
+                    } else {
+                        None
+                    };
+                    ExprType::If {
+                        cond,
+                        then,
+                        otherwise,
+                    }
+                }
+                Token::While => {
+                    let cond = Box::new(self.parse_expr()?);
+                    let body = Box::new(self.parse_expr()?);
+                    ExprType::While { cond, body }
                 }
 
                 unary_op
@@ -265,13 +388,48 @@ impl<'a> Parser<'a> {
         let typ = match self.peek()? {
             Token::Let => {
                 self.next()?;
-                self.expect_tok(Token::Identifier)?;
-                let name = self.slice().to_string();
+                let pat = self.parse_let_pattern()?;
                 self.expect_tok(Token::Assign)?;
                 let expr = self.parse_expr()?;
-                StmtType::Let(name, expr)
+                StmtType::Let(pat, expr)
             }
-            _ => StmtType::Expr(self.parse_expr()?),
+            Token::Dbg => {
+                self.next()?;
+
+                let v = self.parse_expr()?;
+
+                StmtType::Dbg(v)
+            }
+            _ => {
+                let mut check = self.clone();
+
+                match check.parse_assign_pattern() {
+                    Ok(pat) => {
+                        let tok = check.peek()?;
+                        if tok == Token::Assign {
+                            check.next()?;
+                            self.lexer = check.lexer;
+                            let e = self.parse_expr()?;
+                            StmtType::Assign(pat, e)
+                        } else if let Some(op) = tok.to_assign_op() {
+                            check.next()?;
+                            self.lexer = check.lexer;
+                            let e = self.parse_expr()?;
+                            StmtType::AssignOp(pat, op, e)
+                        } else {
+                            let e = self.parse_expr()?;
+                            StmtType::Expr(e)
+                        }
+                    }
+                    Err(pat_err) => {
+                        let e = self.parse_expr()?;
+                        if self.next_is(Token::Assign)? {
+                            return Err(pat_err);
+                        }
+                        StmtType::Expr(e)
+                    }
+                }
+            }
         };
 
         Ok(StmtNode {

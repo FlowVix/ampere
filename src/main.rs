@@ -1,5 +1,6 @@
 #![deny(unused_must_use)]
 use std::{
+    cell::RefCell,
     fs::File,
     io::{Read, Write},
     path::PathBuf,
@@ -46,9 +47,9 @@ fn main() {
             err.into_report().display();
             std::process::exit(1);
         }
-    }
-    .map(|v| v.value)
-    .unwrap_or(Value::unit());
+    };
+    // .map(|v| v.value)
+    // .unwrap_or(Value::unit());
 
-    println!("{}", result.display().bright_green());
+    // println!("{}", result.display().bright_green());
 }

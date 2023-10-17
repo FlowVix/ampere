@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Ref, RefCell},
+    rc::Rc,
+};
 
 use itertools::Itertools;
 
@@ -11,8 +14,8 @@ pub enum Value {
     Bool(bool),
     String(String),
 
-    Array(Vec<Value>),
-    Tuple(Vec<Value>),
+    Array(Vec<ValueRef>),
+    Tuple(Vec<ValueRef>),
 }
 
 impl Value {
@@ -22,8 +25,14 @@ impl Value {
             Value::Float(v) => v.to_string(),
             Value::Bool(v) => v.to_string(),
             Value::String(v) => v.clone(),
-            Value::Array(v) => format!("[{}]", v.iter().map(|v| v.display()).join(", ")),
-            Value::Tuple(v) => format!("({})", v.iter().map(|v| v.display()).join(", ")),
+            Value::Array(v) => format!(
+                "[{}]",
+                v.iter().map(|v| v.borrow().value.display()).join(", ")
+            ),
+            Value::Tuple(v) => format!(
+                "({})",
+                v.iter().map(|v| v.borrow().value.display()).join(", ")
+            ),
         }
     }
     pub fn into_stored(self, def_area: CodeArea) -> StoredValue {
@@ -47,9 +56,18 @@ impl ValueRef {
     pub fn new(v: StoredValue) -> Self {
         Self(Rc::new(RefCell::new(v)))
     }
-    // pub fn deep_clone(&self) -> Self {
+    pub fn deep_clone(&self) -> Self {
+        let v = self.borrow();
 
-    // }
+        Self::new(
+            match &v.value {
+                Value::Array(v) => Value::Array(v.iter().map(|v| v.deep_clone()).collect()),
+                Value::Tuple(v) => Value::Tuple(v.iter().map(|v| v.deep_clone()).collect()),
+                v => v.clone(),
+            }
+            .into_stored(v.def_area.clone()),
+        )
+    }
 }
 
 impl Value {

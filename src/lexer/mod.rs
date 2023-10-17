@@ -178,6 +178,7 @@ impl<'a> Lexer<'a> {
                         "while" => Token::While,
                         "for" => Token::For,
                         "let" => Token::Let,
+                        "dbg" => Token::Dbg,
                         _ => Token::Identifier,
                     }));
                 }

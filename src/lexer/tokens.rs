@@ -70,6 +70,8 @@ tokens! {
 
     Let: "let",
 
+    Dbg: "dbg",
+
     Semicolon: ";",
     Period: ".",
     Comma: ",",

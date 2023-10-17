@@ -1,6 +1,6 @@
 use crate::source::CodeSpan;
 
-use super::operators::{BinOp, UnaryOp};
+use super::operators::{AssignOp, BinOp, UnaryOp};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprNode {
@@ -28,9 +28,25 @@ pub enum ExprType {
         base: Box<ExprNode>,
         member: String,
     },
+    Associated {
+        base: Box<ExprNode>,
+        member: String,
+    },
 
     Array(Vec<ExprNode>),
     Tuple(Vec<ExprNode>),
+
+    Block(Box<Stmts>),
+
+    If {
+        cond: Box<ExprNode>,
+        then: Box<ExprNode>,
+        otherwise: Option<Box<ExprNode>>,
+    },
+    While {
+        cond: Box<ExprNode>,
+        body: Box<ExprNode>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,11 +58,51 @@ pub struct StmtNode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum StmtType {
     Expr(ExprNode),
-    Let(String, ExprNode),
+
+    Let(LetPatternNode, ExprNode),
+    Assign(AssignPatternNode, ExprNode),
+    AssignOp(AssignPatternNode, AssignOp, ExprNode),
+
+    Dbg(ExprNode),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmts {
     Normal(Vec<StmtNode>),
     Ret(Vec<StmtNode>, StmtNode),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssignPatternNode {
+    pub typ: AssignPatternType,
+    pub span: CodeSpan,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssignPatternType {
+    Path { var: String, path: Vec<AssignPath> },
+
+    ArrayDestructure(Vec<AssignPatternNode>),
+    TupleDestructure(Vec<AssignPatternNode>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssignPath {
+    Index(ExprNode),
+    Member(String),
+    Associated(String),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LetPatternNode {
+    pub typ: LetPatternType,
+    pub span: CodeSpan,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LetPatternType {
+    Var(String),
+
+    ArrayDestructure(Vec<LetPatternNode>),
+    TupleDestructure(Vec<LetPatternNode>),
 }

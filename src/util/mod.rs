@@ -1,5 +1,3 @@
-pub mod slabmap;
-
 /// all values in range `0-1`
 pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> (u8, u8, u8) {
     let h = h * 6.0;

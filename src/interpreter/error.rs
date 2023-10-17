@@ -16,6 +16,21 @@ pub enum RuntimeError {
         op: &'static str,
         area: CodeArea,
     },
+    NonBoolCondition {
+        v: (ValueType, CodeArea),
+        area: CodeArea,
+    },
+    TypeMismatch {
+        v: (ValueType, CodeArea),
+        expected: ValueType,
+        area: CodeArea,
+    },
+    DestructureLenMismatch {
+        expected: usize,
+        found: usize,
+        val_area: CodeArea,
+        area: CodeArea,
+    },
 }
 
 impl RuntimeError {
@@ -37,8 +52,43 @@ impl RuntimeError {
                             b.0.name(),
                         ),
                     ),
-                    (a.1, special_fmt!("This is of type `{}`", a.0.name())),
-                    (b.1, special_fmt!("This is of type `{}`", b.0.name())),
+                    (a.1, special_fmt!("This is of type {}", a.0.name())),
+                    (b.1, special_fmt!("This is of type {}", b.0.name())),
+                ],
+            ),
+            RuntimeError::NonBoolCondition { v, area } => (
+                "Invalid type for condition",
+                vec![
+                    (
+                        area,
+                        special_fmt!("{} cannot be used as a condition", v.0.name(),),
+                    ),
+                    (v.1, special_fmt!("This is of type {}", v.0.name())),
+                ],
+            ),
+            RuntimeError::TypeMismatch { v, expected, area } => (
+                "Type mismatch",
+                vec![
+                    (
+                        area,
+                        special_fmt!("Expected {}, found {}", expected.name(), v.0.name()),
+                    ),
+                    (v.1, special_fmt!("This is of type {}", v.0.name())),
+                ],
+            ),
+            RuntimeError::DestructureLenMismatch {
+                expected,
+                found,
+                val_area,
+                area,
+            } => (
+                "Incorrect element amount for destructure",
+                vec![
+                    (
+                        area,
+                        special_fmt!("Expected {} elements, found {}", expected, found),
+                    ),
+                    (val_area, special_fmt!("This has {} elements", found)),
                 ],
             ),
         };
