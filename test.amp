@@ -1,7 +1,7 @@
 
 
-let a = 0;
-while a < 10000000 {
-    a = a + 1;
-};
-dbg a;
+let (a, b) = (0, 1);
+while a < 1000 {
+    dbg a;
+    (a, b) = (b, a + b);
+}

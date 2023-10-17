@@ -199,7 +199,7 @@ impl<'a> Parser<'a> {
                     list_helper! {self, ClosedParen {
                         out.push(self.parse_assign_pattern()?);
                     }}
-                    AssignPatternType::ArrayDestructure(out)
+                    AssignPatternType::TupleDestructure(out)
                 }
                 t => {
                     return Err(ParserError::UnexpectedToken {
