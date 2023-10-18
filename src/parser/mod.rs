@@ -4,6 +4,8 @@ pub mod operators;
 
 use std::rc::Rc;
 
+use lasso::{Rodeo, Spur};
+
 use crate::{
     lexer::{error::LexerError, tokens::Token, Lexer},
     source::{AmpereSource, CodeArea, CodeSpan},
@@ -42,15 +44,20 @@ macro_rules! list_helper {
     };
 }
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     src: &'a Rc<AmpereSource>,
+    interner: &'a mut Rodeo,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a>, src: &'a Rc<AmpereSource>) -> Self {
-        Self { lexer, src }
+    pub fn new(lexer: Lexer<'a>, src: &'a Rc<AmpereSource>, interner: &'a mut Rodeo) -> Self {
+        Self {
+            lexer,
+            src,
+            interner,
+        }
     }
 
     pub fn change_next_result(
@@ -77,6 +84,9 @@ impl<'a> Parser<'a> {
     }
     pub fn slice(&self) -> &str {
         self.lexer.slice()
+    }
+    pub fn slice_interned(&mut self) -> Spur {
+        self.lexer.slice_interned(self.interner)
     }
 
     pub fn make_area(&self, span: CodeSpan) -> CodeArea {
@@ -118,13 +128,20 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    pub fn intern<T>(&mut self, s: T) -> Spur
+    where
+        T: AsRef<str>,
+    {
+        self.interner.get_or_intern(s)
+    }
+
     pub fn parse_let_pattern(&mut self) -> Result<LetPatternNode, ParserError> {
         let t = self.next()?;
         let start = self.span();
         Ok(LetPatternNode {
             typ: match t {
                 Token::Identifier => {
-                    let name = self.slice().to_string();
+                    let name = self.slice_interned();
                     LetPatternType::Var(name)
                 }
                 Token::OpenSqBracket => {
@@ -158,7 +175,7 @@ impl<'a> Parser<'a> {
         Ok(AssignPatternNode {
             typ: match t {
                 Token::Identifier => {
-                    let name = self.slice().to_string();
+                    let name = self.slice_interned();
                     let mut path = vec![];
 
                     let mut out_span = start.extended(self.span());
@@ -175,8 +192,8 @@ impl<'a> Parser<'a> {
                             Token::Period => {
                                 self.next()?;
                                 self.expect_tok(Token::Identifier)?;
-                                let member = self.slice();
-                                path.push(AssignPath::Member(member.into()));
+                                let member = self.slice_interned();
+                                path.push(AssignPath::Member(member));
                             }
                             _ => break,
                         };
@@ -234,17 +251,18 @@ impl<'a> Parser<'a> {
                 Token::False => ExprType::Bool(false),
 
                 Token::String => {
-                    let s = self.slice();
+                    let s = self.slice().to_string();
+                    let s = self.intern(&s[1..(s.len() - 1)]);
 
-                    ExprType::String(s[1..(s.len() - 1)].into())
+                    ExprType::String(s)
                 }
-                Token::Identifier => ExprType::Var(self.slice().into()),
+                Token::Identifier => ExprType::Var(self.slice_interned()),
 
                 Token::OpenParen => {
-                    let mut check = self.clone();
+                    let old_lexer = self.lexer.clone();
                     let mut depth = 1usize;
                     loop {
-                        match check.next()? {
+                        match self.next()? {
                             Token::OpenParen => {
                                 depth += 1;
                             }
@@ -257,7 +275,9 @@ impl<'a> Parser<'a> {
                             _ => {}
                         }
                     }
-                    match check.peek()? {
+                    let t = self.peek()?;
+                    self.lexer = old_lexer;
+                    match t {
                         Token::Arrow | Token::FatArrow => {
                             let mut params = vec![];
                             list_helper! {self, ClosedParen {
@@ -378,11 +398,11 @@ impl<'a> Parser<'a> {
                 Token::Period => {
                     self.next()?;
                     self.expect_tok(Token::Identifier)?;
-                    let member = self.slice();
+                    let member = self.slice_interned();
 
                     ExprType::Member {
                         base: Box::new(out),
-                        member: member.into(),
+                        member,
                     }
                 }
                 _ => break,
@@ -446,19 +466,18 @@ impl<'a> Parser<'a> {
                 StmtType::Dbg(v)
             }
             _ => {
-                let mut check = self.clone();
+                // let mut check = self.clone();
+                let old_lexer = self.lexer.clone();
 
-                match check.parse_assign_pattern() {
+                match self.parse_assign_pattern() {
                     Ok(pat) => {
-                        let tok = check.peek()?;
+                        let tok = self.peek()?;
                         if tok == Token::Assign {
-                            check.next()?;
-                            self.lexer = check.lexer;
+                            self.next()?;
                             let e = self.parse_expr()?;
                             StmtType::Assign(pat, e)
                         } else if let Some(op) = tok.to_assign_op() {
-                            check.next()?;
-                            self.lexer = check.lexer;
+                            self.next()?;
                             let e = self.parse_expr()?;
                             StmtType::AssignOp(pat, op, e)
                         } else {
@@ -467,6 +486,7 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Err(pat_err) => {
+                        self.lexer = old_lexer;
                         let e = self.parse_expr()?;
                         if self.next_is(Token::Assign)? {
                             return Err(pat_err);

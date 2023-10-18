@@ -1,5 +1,7 @@
 use std::str::CharIndices;
 
+use lasso::{Rodeo, Spur};
+
 use crate::{parser::error::ParserError, source::CodeSpan};
 
 use self::{error::LexerError, tokens::Token};
@@ -42,6 +44,10 @@ impl<'a> Lexer<'a> {
     #[inline]
     pub fn slice(&self) -> &str {
         &self.src[self.span.start..self.span.end]
+    }
+    #[inline]
+    pub fn slice_interned(&self, interner: &mut Rodeo) -> Spur {
+        interner.get_or_intern(&self.src[self.span.start..self.span.end])
     }
 
     fn update_span(&mut self) {

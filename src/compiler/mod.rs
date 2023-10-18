@@ -1,5 +1,7 @@
 use std::rc::Rc;
 
+use lasso::{Rodeo, Spur};
+
 use crate::{
     parser::ast::{ExprNode, ExprType},
     source::AmpereSource,
@@ -16,12 +18,17 @@ pub mod scope;
 
 pub struct Compiler<'a> {
     src: &'a Rc<AmpereSource>,
+    interner: &'a mut Rodeo,
     // scopes:
 }
 
 pub type CompileResult<T> = Result<T, CompilerError>;
 
 impl<'a> Compiler<'a> {
+    pub fn resolve(&self, s: &Spur) -> &str {
+        self.interner.resolve(s)
+    }
+
     pub fn compile_expr(
         &mut self,
         expr: &ExprNode,
@@ -31,7 +38,7 @@ impl<'a> Compiler<'a> {
             ExprType::Int(v) => builder.load_const(Constant::Int(*v), expr.span),
             ExprType::Float(v) => builder.load_const(Constant::Float(*v), expr.span),
             ExprType::String(v) => {
-                builder.load_const(Constant::String(v.clone().into_boxed_str()), expr.span)
+                builder.load_const(Constant::String(self.resolve(v).into()), expr.span)
             }
             ExprType::Bool(v) => builder.load_const(Constant::Bool(*v), expr.span),
             ExprType::Var(_) => todo!(),

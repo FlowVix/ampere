@@ -8,6 +8,7 @@ use std::{
 };
 
 use colored::Colorize;
+use lasso::Rodeo;
 // use interpreter::{value::Value, Interpreter};
 use lexer::Lexer;
 use parser::Parser;
@@ -25,12 +26,14 @@ fn main() {
     print!("\x1B[2J\x1B[1;1H");
     std::io::stdout().flush().unwrap();
 
+    let mut interner = Rodeo::default();
+
     let src = source::AmpereSource::File(PathBuf::from("test.amp"));
     let src = Rc::new(src);
 
     let code = src.read();
     let lexer = Lexer::new(&code);
-    let mut parser = Parser::new(lexer, &src);
+    let mut parser = Parser::new(lexer, &src, &mut interner);
 
     let stmts = match parser.parse() {
         Ok(v) => {

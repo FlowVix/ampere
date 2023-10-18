@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use lasso::Spur;
 
 use crate::source::CodeSpan;
 
@@ -14,10 +15,10 @@ pub struct ExprNode {
 pub enum ExprType {
     Int(i64),
     Float(f64),
-    String(String),
+    String(Spur),
     Bool(bool),
 
-    Var(String),
+    Var(Spur),
 
     Unary(UnaryOp, Box<ExprNode>),
     Op(Box<ExprNode>, BinOp, Box<ExprNode>),
@@ -28,11 +29,11 @@ pub enum ExprType {
     },
     Member {
         base: Box<ExprNode>,
-        member: String,
+        member: Spur,
     },
     Associated {
         base: Box<ExprNode>,
-        member: String,
+        member: Spur,
     },
     Call {
         base: Box<ExprNode>,
@@ -91,7 +92,7 @@ pub struct AssignPatternNode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AssignPatternType {
-    Path { var: String, path: Vec<AssignPath> },
+    Path { var: Spur, path: Vec<AssignPath> },
 
     ArrayDestructure(Vec<AssignPatternNode>),
     TupleDestructure(Vec<AssignPatternNode>),
@@ -100,8 +101,8 @@ pub enum AssignPatternType {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AssignPath {
     Index(ExprNode),
-    Member(String),
-    Associated(String),
+    Member(Spur),
+    Associated(Spur),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,23 +110,23 @@ pub struct LetPatternNode {
     pub typ: LetPatternType,
     pub span: CodeSpan,
 }
-impl LetPatternNode {
-    pub fn to_str(&self) -> String {
-        match &self.typ {
-            LetPatternType::Var(v) => v.clone(),
-            LetPatternType::ArrayDestructure(v) => {
-                format!("[{}]", v.iter().map(|v| v.to_str()).join(", "))
-            }
-            LetPatternType::TupleDestructure(v) => {
-                format!("[{}]", v.iter().map(|v| v.to_str()).join(", "))
-            }
-        }
-    }
-}
+// impl LetPatternNode {
+//     pub fn to_str(&self) -> String {
+//         match &self.typ {
+//             LetPatternType::Var(v) => v.clone(),
+//             LetPatternType::ArrayDestructure(v) => {
+//                 format!("[{}]", v.iter().map(|v| v.to_str()).join(", "))
+//             }
+//             LetPatternType::TupleDestructure(v) => {
+//                 format!("[{}]", v.iter().map(|v| v.to_str()).join(", "))
+//             }
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LetPatternType {
-    Var(String),
+    Var(Spur),
 
     ArrayDestructure(Vec<LetPatternNode>),
     TupleDestructure(Vec<LetPatternNode>),
