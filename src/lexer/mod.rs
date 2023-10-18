@@ -75,6 +75,10 @@ impl<'a> Lexer<'a> {
                     self.next_char();
                     Ok(Some(Token::MinusEq))
                 }
+                Some('>') => {
+                    self.next_char();
+                    Ok(Some(Token::Arrow))
+                }
                 _ => Ok(Some(Token::Minus)),
             },
             Some('*') => match self.peek_char() {
@@ -113,6 +117,7 @@ impl<'a> Lexer<'a> {
             Some('{') => Ok(Some(Token::OpenBracket)),
             Some('}') => Ok(Some(Token::ClosedBracket)),
             Some(';') => Ok(Some(Token::Semicolon)),
+            Some(':') => Ok(Some(Token::Colon)),
             Some('.') => Ok(Some(Token::Period)),
             Some(',') => Ok(Some(Token::Comma)),
 
@@ -120,6 +125,10 @@ impl<'a> Lexer<'a> {
                 Some('=') => {
                     self.next_char();
                     Ok(Some(Token::Eq))
+                }
+                Some('>') => {
+                    self.next_char();
+                    Ok(Some(Token::FatArrow))
                 }
                 _ => Ok(Some(Token::Assign)),
             },

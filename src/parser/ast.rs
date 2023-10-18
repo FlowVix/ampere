@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::source::CodeSpan;
 
 use super::operators::{AssignOp, BinOp, UnaryOp};
@@ -32,6 +34,10 @@ pub enum ExprType {
         base: Box<ExprNode>,
         member: String,
     },
+    Call {
+        base: Box<ExprNode>,
+        args: Vec<ExprNode>,
+    },
 
     Array(Vec<ExprNode>),
     Tuple(Vec<ExprNode>),
@@ -45,6 +51,11 @@ pub enum ExprType {
     },
     While {
         cond: Box<ExprNode>,
+        body: Box<ExprNode>,
+    },
+    Function {
+        params: Vec<(LetPatternNode, Option<ExprNode>)>,
+        ret_type: Option<Box<ExprNode>>,
         body: Box<ExprNode>,
     },
 }
@@ -97,6 +108,19 @@ pub enum AssignPath {
 pub struct LetPatternNode {
     pub typ: LetPatternType,
     pub span: CodeSpan,
+}
+impl LetPatternNode {
+    pub fn to_str(&self) -> String {
+        match &self.typ {
+            LetPatternType::Var(v) => v.clone(),
+            LetPatternType::ArrayDestructure(v) => {
+                format!("[{}]", v.iter().map(|v| v.to_str()).join(", "))
+            }
+            LetPatternType::TupleDestructure(v) => {
+                format!("[{}]", v.iter().map(|v| v.to_str()).join(", "))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

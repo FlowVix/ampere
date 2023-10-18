@@ -1,3 +1,8 @@
+use std::rc::Rc;
+
+pub mod slabmap;
+pub mod unique_register;
+
 /// all values in range `0-1`
 pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> (u8, u8, u8) {
     let h = h * 6.0;
@@ -24,3 +29,9 @@ pub fn hsv_to_rgb(h: f64, s: f64, v: f64) -> (u8, u8, u8) {
 
     ((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8)
 }
+
+pub type ImmutStr = Box<str>;
+pub type ImmutCloneStr = Rc<str>;
+
+pub type ImmutVec<T> = Box<[T]>;
+pub type ImmutCloneVec<T> = Rc<[T]>;

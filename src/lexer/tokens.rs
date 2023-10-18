@@ -72,9 +72,12 @@ tokens! {
 
     Dbg: "dbg",
 
+    Colon: ":",
     Semicolon: ";",
     Period: ".",
     Comma: ",",
+    Arrow: "->",
+    FatArrow: "=>",
 
     Eof: "end of file",
 }

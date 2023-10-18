@@ -1,11 +1,16 @@
 use std::{
     cell::{Ref, RefCell},
-    rc::Rc,
+    rc::{Rc, Weak},
 };
 
 use itertools::Itertools;
 
-use crate::source::CodeArea;
+use crate::{
+    parser::ast::{ExprNode, LetPatternNode},
+    source::CodeArea,
+};
+
+use super::scope::ScopeRef;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -16,10 +21,19 @@ pub enum Value {
 
     Array(Vec<ValueRef>),
     Tuple(Vec<ValueRef>),
+
+    Type(ValueType),
+
+    Function {
+        params: Vec<(LetPatternNode, Option<ValueRef>)>,
+        ret_type: Option<ValueRef>,
+        body: ExprNode,
+        parent_scope: ScopeRef,
+    },
 }
 
 impl Value {
-    pub fn display(&self) -> String {
+    pub fn to_str(&self) -> String {
         match self {
             Value::Int(v) => v.to_string(),
             Value::Float(v) => v.to_string(),
@@ -27,12 +41,39 @@ impl Value {
             Value::String(v) => v.clone(),
             Value::Array(v) => format!(
                 "[{}]",
-                v.iter().map(|v| v.borrow().value.display()).join(", ")
+                v.iter().map(|v| v.borrow().value.to_str()).join(", ")
             ),
             Value::Tuple(v) => format!(
                 "({})",
-                v.iter().map(|v| v.borrow().value.display()).join(", ")
+                v.iter().map(|v| v.borrow().value.to_str()).join(", ")
             ),
+            Value::Type(t) => format!("<{}>", t.name()),
+            Value::Function {
+                params, ret_type, ..
+            } => {
+                format!(
+                    "({}){} => ...",
+                    params
+                        .iter()
+                        .map(|(pat, typ)| {
+                            format!(
+                                "{}{}",
+                                pat.to_str(),
+                                if let Some(t) = typ {
+                                    format!(": {}", t.borrow().value.to_str())
+                                } else {
+                                    "".into()
+                                }
+                            )
+                        })
+                        .join(", "),
+                    if let Some(t) = ret_type {
+                        format!("-> {}", t.borrow().value.to_str())
+                    } else {
+                        "".into()
+                    },
+                )
+            }
         }
     }
     pub fn into_stored(self, def_area: CodeArea) -> StoredValue {
@@ -49,8 +90,20 @@ pub struct StoredValue {
     pub def_area: CodeArea,
 }
 
-#[derive(Debug, Clone, PartialEq, derive_more::Deref, derive_more::DerefMut)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    derive_more::Deref,
+    derive_more::DerefMut,
+    derive_more::Into,
+    derive_more::From,
+)]
 pub struct ValueRef(Rc<RefCell<StoredValue>>);
+#[derive(
+    Debug, Clone, derive_more::Deref, derive_more::DerefMut, derive_more::Into, derive_more::From,
+)]
+pub struct ValueWeak(Weak<RefCell<StoredValue>>);
 
 impl ValueRef {
     pub fn new(v: StoredValue) -> Self {
@@ -77,8 +130,10 @@ impl Value {
             Value::Float(_) => ValueType::Float,
             Value::Bool(_) => ValueType::Bool,
             Value::String(_) => ValueType::String,
-            Value::Array(v) => ValueType::Array,
-            Value::Tuple(v) => ValueType::Tuple,
+            Value::Array(_) => ValueType::Array,
+            Value::Tuple(_) => ValueType::Tuple,
+            Value::Type(_) => ValueType::Type,
+            Value::Function { .. } => ValueType::Function,
         }
     }
     pub fn unit() -> Self {
@@ -94,12 +149,8 @@ pub enum ValueType {
     String,
     Array,
     Tuple,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FullType {
-    Known(ValueType),
-    Unknown,
+    Type,
+    Function,
 }
 
 impl ValueType {
@@ -111,18 +162,8 @@ impl ValueType {
             ValueType::String => "string".into(),
             ValueType::Array => "array".into(),
             ValueType::Tuple => "tuple".into(),
-        }
-    }
-    pub fn into_known(self) -> FullType {
-        FullType::Known(self)
-    }
-}
-
-impl FullType {
-    pub fn name(&self) -> String {
-        match self {
-            FullType::Known(k) => k.name(),
-            FullType::Unknown => "?".into(),
+            ValueType::Type => "type".into(),
+            ValueType::Function => "function".into(),
         }
     }
 }

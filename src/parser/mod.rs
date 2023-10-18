@@ -241,18 +241,63 @@ impl<'a> Parser<'a> {
                 Token::Identifier => ExprType::Var(self.slice().into()),
 
                 Token::OpenParen => {
-                    let inner = self.parse_expr()?;
-                    if self.skip_tok(Token::Comma)? {
-                        let mut out = vec![inner];
-                        if !self.skip_tok(Token::ClosedParen)? {
-                            list_helper! {self, ClosedParen {
-                                out.push(self.parse_expr()?);
-                            }}
+                    let mut check = self.clone();
+                    let mut depth = 1usize;
+                    loop {
+                        match check.next()? {
+                            Token::OpenParen => {
+                                depth += 1;
+                            }
+                            Token::ClosedParen => {
+                                depth -= 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            _ => {}
                         }
-                        ExprType::Tuple(out)
-                    } else {
-                        self.expect_tok(Token::ClosedParen)?;
-                        inner.typ
+                    }
+                    match check.peek()? {
+                        Token::Arrow | Token::FatArrow => {
+                            let mut params = vec![];
+                            list_helper! {self, ClosedParen {
+                                let pat = self.parse_let_pattern()?;
+                                let typ = if self.skip_tok(Token::Colon)? {
+                                    Some(self.parse_expr()?)
+                                } else {
+                                    None
+                                };
+                                params.push((pat, typ))
+                            }}
+                            let ret_type = if self.skip_tok(Token::Arrow)? {
+                                Some(self.parse_expr()?)
+                            } else {
+                                None
+                            }
+                            .map(Box::new);
+                            self.expect_tok(Token::FatArrow)?;
+                            let body = Box::new(self.parse_expr()?);
+                            ExprType::Function {
+                                params,
+                                ret_type,
+                                body,
+                            }
+                        }
+                        _ => {
+                            let inner = self.parse_expr()?;
+                            if self.skip_tok(Token::Comma)? {
+                                let mut out = vec![inner];
+                                if !self.skip_tok(Token::ClosedParen)? {
+                                    list_helper! {self, ClosedParen {
+                                        out.push(self.parse_expr()?);
+                                    }}
+                                }
+                                ExprType::Tuple(out)
+                            } else {
+                                self.expect_tok(Token::ClosedParen)?;
+                                inner.typ
+                            }
+                        }
                     }
                 }
                 Token::OpenSqBracket => {

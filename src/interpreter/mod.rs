@@ -247,6 +247,33 @@ impl<'a> Interpreter<'a> {
                     Value::unit()
                 }
                 ExprType::Associated { base, member } => todo!(),
+                ExprType::Call { base, args } => todo!(),
+                ExprType::Function {
+                    params,
+                    ret_type,
+                    body,
+                } => {
+                    let mut out_params = vec![];
+                    for (pat, t) in params {
+                        let t = if let Some(t) = t {
+                            Some(self.run_expr(t, scope)?)
+                        } else {
+                            None
+                        };
+                        out_params.push((pat.clone(), t))
+                    }
+                    let ret_type = if let Some(t) = ret_type {
+                        Some(self.run_expr(t, scope)?)
+                    } else {
+                        None
+                    };
+                    Value::Function {
+                        params: out_params,
+                        ret_type,
+                        body: (**body).clone(),
+                        parent_scope: scope.clone(),
+                    }
+                }
             }
             .into_stored(expr.span.into_area(self.src.clone())),
         ))
@@ -268,7 +295,7 @@ impl<'a> Interpreter<'a> {
                     self.run_expr(v, scope)?
                         .borrow()
                         .value
-                        .display()
+                        .to_str()
                         .bright_green()
                 )
             }

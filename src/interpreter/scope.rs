@@ -24,6 +24,11 @@ impl ScopeRef {
         })
     }
 }
+impl PartialEq for ScopeRef {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(self, other)
+    }
+}
 
 impl Scope {
     pub fn get_var(&self, name: &str) -> Option<ValueRef> {

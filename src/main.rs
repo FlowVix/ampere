@@ -8,16 +8,18 @@ use std::{
 };
 
 use colored::Colorize;
-use interpreter::{value::Value, Interpreter};
+// use interpreter::{value::Value, Interpreter};
 use lexer::Lexer;
 use parser::Parser;
 
+mod compiler;
 mod error;
-mod interpreter;
+// mod interpreter;
 mod lexer;
 mod parser;
 mod source;
 mod util;
+mod vm;
 
 fn main() {
     print!("\x1B[2J\x1B[1;1H");
@@ -41,13 +43,13 @@ fn main() {
         }
     };
 
-    let result = match Interpreter::new_run_file(&stmts, &src) {
-        Ok(v) => v,
-        Err(err) => {
-            err.into_report().display();
-            std::process::exit(1);
-        }
-    };
+    // let result = match Interpreter::new_run_file(&stmts, &src) {
+    //     Ok(v) => v,
+    //     Err(err) => {
+    //         err.into_report().display();
+    //         std::process::exit(1);
+    //     }
+    // };
     // .map(|v| v.value)
     // .unwrap_or(Value::unit());
 
