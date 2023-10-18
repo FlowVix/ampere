@@ -1,3 +1,4 @@
+#[macro_export]
 macro_rules! make_ids {
     (
         $(
@@ -19,6 +20,18 @@ macro_rules! make_ids {
                 derive_more::DerefMut,
             )]
             pub struct $name($inner);
+
+            impl From<usize> for $name {
+                fn from(value: usize) -> Self {
+                    Self(value as $inner)
+                }
+            }
+
+            impl From<$name> for usize {
+                fn from(value: $name) -> Self {
+                    value.0 as usize
+                }
+            }
         )*
     };
 }

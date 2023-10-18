@@ -3,7 +3,7 @@ use std::mem::MaybeUninit;
 use ahash::AHashMap;
 
 #[derive(Debug, Clone)]
-pub struct UniqueRegister<T: std::hash::Hash + Eq> {
+pub struct UniqueRegister<T> {
     map: AHashMap<T, usize>,
 }
 
