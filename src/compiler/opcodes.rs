@@ -14,8 +14,6 @@ macro_rules! make_ids {
                 Eq,
                 PartialOrd,
                 Ord,
-                derive_more::Into,
-                derive_more::From,
                 derive_more::Deref,
                 derive_more::DerefMut,
             )]
@@ -26,10 +24,20 @@ macro_rules! make_ids {
                     Self(value as $inner)
                 }
             }
+            impl From<$inner> for $name {
+                fn from(value: $inner) -> Self {
+                    Self(value)
+                }
+            }
 
             impl From<$name> for usize {
                 fn from(value: $name) -> Self {
                     value.0 as usize
+                }
+            }
+            impl From<$name> for $inner {
+                fn from(value: $name) -> Self {
+                    value.0
                 }
             }
         )*
@@ -49,18 +57,24 @@ pub enum Opcode {
     SetVar(VarID),
     LoadVar(VarID),
 
+    PopTop,
+
     Plus,
     Minus,
     Mult,
     Div,
     Modulo,
+    Pow,
 
     Gt,
     Gte,
     Lt,
     Lte,
     Eq,
-    NEq,
+    NotEq,
+
+    UnaryMinus,
+    UnaryNot,
 
     Jump(OpcodePos),
     JumpIfFalse(OpcodePos),

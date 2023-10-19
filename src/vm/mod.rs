@@ -158,12 +158,15 @@ impl Vm {
                 Opcode::Mult => bin_op!(mult),
                 Opcode::Div => bin_op!(div),
                 Opcode::Modulo => bin_op!(modulo),
+                Opcode::Pow => bin_op!(pow),
                 Opcode::Gt => bin_op!(gt),
                 Opcode::Gte => bin_op!(gte),
                 Opcode::Lt => bin_op!(lt),
                 Opcode::Lte => bin_op!(lte),
                 Opcode::Eq => bin_op!(eq),
-                Opcode::NEq => bin_op!(neq),
+                Opcode::NotEq => bin_op!(not_eq),
+                Opcode::UnaryMinus => todo!(),
+                Opcode::UnaryNot => todo!(),
                 Opcode::Jump(v) => {
                     pos = *v as usize;
                     continue;
@@ -181,6 +184,9 @@ impl Vm {
                         pos = *v as usize;
                         continue;
                     }
+                }
+                Opcode::PopTop => {
+                    self.pop();
                 }
             }
 

@@ -1,15 +1,21 @@
 use ahash::AHashMap;
+use lasso::Spur;
 
-use crate::source::CodeSpan;
+use crate::{make_ids, source::CodeSpan};
 
 use super::opcodes::VarID;
 
-// #[derive(Debug, Clone, Copy)]
-// pub struct VarData {
-//     def_span: CodeSpan,
-//     id: VarID,
-// }
+make_ids! {
+    ScopeID: u32;
+}
 
-// pub struct Scope {
-//     vars: AHashMap<>
-// }
+#[derive(Debug, Clone, Copy)]
+pub struct VarData {
+    pub def_span: CodeSpan,
+    pub id: VarID,
+}
+
+pub struct Scope {
+    pub vars: AHashMap<Spur, VarData>,
+    pub parent: Option<ScopeID>,
+}

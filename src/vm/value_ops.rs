@@ -150,6 +150,28 @@ pub fn modulo(
         }
     })
 }
+pub fn pow(
+    vm: &mut Vm,
+    a: MemKey,
+    b: MemKey,
+    span: CodeSpan,
+    src: &Rc<AmpereSource>,
+) -> RuntimeResult<Value> {
+    let a = vm.get(a);
+    let b = vm.get(b);
+    Ok(match (&a.value, &b.value) {
+        (Value::Int(a), Value::Int(b)) => Value::Int((*a as f64).powf(*b as f64) as i64),
+        (Value::Float(a), Value::Float(b)) => Value::Float(a.powf(*b)),
+        (_, _) => {
+            return Err(RuntimeError::InvalidBinaryOperands {
+                a: (a.value.get_type(), a.def_area.clone()),
+                b: (b.value.get_type(), b.def_area.clone()),
+                op: "**",
+                area: span.into_area(src.clone()),
+            })
+        }
+    })
+}
 
 pub fn gt(
     vm: &mut Vm,
@@ -282,7 +304,7 @@ pub fn eq(
             area: span.into_area(src.clone()),
         })
 }
-pub fn neq(
+pub fn not_eq(
     vm: &mut Vm,
     a: MemKey,
     b: MemKey,

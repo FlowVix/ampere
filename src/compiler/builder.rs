@@ -2,8 +2,8 @@ use crate::source::CodeSpan;
 
 use super::{
     bytecode::Constant,
-    opcodes::Opcode,
-    proto::{Block, BlockContent, BlockID, JumpType, ProtoBytecode, ProtoOpcode},
+    opcodes::{Opcode, VarID},
+    proto::{Block, BlockContent, BlockID, JumpType, ProtoBytecode, ProtoFunc, ProtoOpcode},
 };
 
 pub struct CodeBuilder<'a> {
@@ -13,8 +13,16 @@ pub struct CodeBuilder<'a> {
 }
 
 impl<'a> CodeBuilder<'a> {
+    fn current_func(&mut self) -> &mut ProtoFunc {
+        &mut self.proto_bytecode.functions[self.func]
+    }
     fn current_block(&mut self) -> &mut Block {
         &mut self.proto_bytecode.blocks[self.block]
+    }
+    pub fn new_var(&mut self) -> VarID {
+        let v = self.current_func().var_count.into();
+        self.current_func().var_count += 1;
+        v
     }
 
     pub fn load_const(&mut self, c: Constant, span: CodeSpan) {
