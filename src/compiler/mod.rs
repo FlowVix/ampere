@@ -1,14 +1,15 @@
 use std::rc::Rc;
 
+use ahash::AHashMap;
 use lasso::{Rodeo, Spur};
 
 use crate::{
     parser::{
-        ast::{ExprNode, ExprType, LetPatternNode, LetPatternType, StmtNode, StmtType},
+        ast::{ExprNode, ExprType, LetPatternNode, LetPatternType, StmtNode, StmtType, Stmts},
         operators::{BinOp, UnaryOp},
     },
     source::{AmpereSource, CodeArea, CodeSpan},
-    util::slabmap::SlabMap,
+    util::{slabmap::SlabMap, unique_register::UniqueRegister},
 };
 
 use self::{
@@ -16,6 +17,7 @@ use self::{
     bytecode::Constant,
     error::CompilerError,
     opcodes::Opcode,
+    proto::ProtoBytecode,
     scope::{Scope, ScopeID, VarData},
 };
 
@@ -35,6 +37,13 @@ pub struct Compiler<'a> {
 pub type CompileResult<T> = Result<T, CompilerError>;
 
 impl<'a> Compiler<'a> {
+    pub fn new(src: &'a Rc<AmpereSource>, interner: &'a mut Rodeo) -> Self {
+        Self {
+            src,
+            interner,
+            scopes: SlabMap::new(),
+        }
+    }
     pub fn resolve(&self, s: &Spur) -> &str {
         self.interner.resolve(s)
     }
@@ -145,16 +154,78 @@ impl<'a> Compiler<'a> {
         stmt: &StmtNode,
         builder: &mut CodeBuilder,
         scope: ScopeID,
+        ret: bool,
     ) -> CompileResult<()> {
         match &stmt.typ {
             StmtType::Expr(v) => {
                 self.compile_expr(v, builder, scope)?;
+                if !ret {
+                    builder.push_raw_opcode(Opcode::PopTop, stmt.span);
+                }
+                return Ok(());
             }
-            StmtType::Let(pat, v) => {}
+            StmtType::Let(pat, v) => {
+                self.do_let(pat, builder, scope)?;
+            }
             StmtType::Assign(_, _) => todo!(),
             StmtType::AssignOp(_, _, _) => todo!(),
             StmtType::Dbg(_) => todo!(),
         }
+
+        if ret {
+            builder.push_raw_opcode(Opcode::PushUnit, stmt.span);
+        }
+
         Ok(())
+    }
+    pub fn compile_stmts(
+        &mut self,
+        stmts: &Stmts,
+        builder: &mut CodeBuilder,
+        scope: ScopeID,
+        span: CodeSpan,
+    ) -> CompileResult<()> {
+        let (v, r) = match stmts {
+            Stmts::Normal(v) => (v, None),
+            Stmts::Ret(v, r) => (v, Some(r)),
+        };
+
+        for i in v {
+            self.compile_stmt(i, builder, scope, false)?;
+        }
+        if let Some(r) = r {
+            self.compile_stmt(r, builder, scope, true)?;
+        } else {
+            builder.push_raw_opcode(Opcode::PushUnit, span);
+        }
+
+        Ok(())
+    }
+    pub fn new_compile_file(
+        stmts: &Stmts,
+        src: &'a Rc<AmpereSource>,
+        interner: &'a mut Rodeo,
+        span: CodeSpan,
+    ) -> CompileResult<ProtoBytecode> {
+        let mut compiler = Self::new(src, interner);
+
+        let mut code = ProtoBytecode {
+            consts: UniqueRegister::new(),
+            functions: vec![],
+            blocks: SlabMap::new(),
+        };
+        code.new_func(
+            |builder| {
+                let global_scope = compiler.scopes.insert(Scope {
+                    vars: AHashMap::new(),
+                    parent: None,
+                });
+                compiler.compile_stmts(stmts, builder, global_scope, span)?;
+                Ok(())
+            },
+            span,
+        )?;
+
+        Ok(code)
     }
 }

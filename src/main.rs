@@ -13,6 +13,8 @@ use lasso::Rodeo;
 use lexer::Lexer;
 use parser::Parser;
 
+use crate::compiler::Compiler;
+
 mod compiler;
 mod error;
 // mod interpreter;
@@ -45,6 +47,16 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    match Compiler::new_compile_file(&stmts, &src, &mut interner, (0..code.len()).into()) {
+        Ok(c) => {
+            c.build(&src).display();
+        }
+        Err(err) => {
+            err.into_report().display();
+            std::process::exit(1);
+        }
+    }
 
     // let result = match Interpreter::new_run_file(&stmts, &src) {
     //     Ok(v) => v,

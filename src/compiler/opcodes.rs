@@ -16,6 +16,7 @@ macro_rules! make_ids {
                 Ord,
                 derive_more::Deref,
                 derive_more::DerefMut,
+                Hash,
             )]
             pub struct $name($inner);
 
@@ -58,6 +59,7 @@ pub enum Opcode {
     LoadVar(VarID),
 
     PopTop,
+    PushUnit,
 
     Plus,
     Minus,

@@ -2,9 +2,5 @@
 
 
 
-while true {
-    let f = (aaaaaa, bbbbb, ccccccccc) => {
 
-    };
-}
-
+let v = 1 + 3

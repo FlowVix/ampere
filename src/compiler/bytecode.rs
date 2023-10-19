@@ -1,5 +1,8 @@
 use std::{hash::Hash, rc::Rc};
 
+use colored::Colorize;
+use itertools::Itertools;
+
 use crate::{
     source::{AmpereSource, CodeSpan},
     util::{ImmutStr, ImmutVec},
@@ -37,4 +40,29 @@ pub struct Bytecode {
     pub constants: ImmutVec<Constant>,
     pub funcs: ImmutVec<Function>,
     pub src: Rc<AmpereSource>,
+}
+
+impl Bytecode {
+    pub fn display(&self) {
+        println!(
+            "Constants: {}\n",
+            self.constants
+                .iter()
+                .map(|v| format!("{:?}", v).bright_green())
+                .join(", ")
+        );
+
+        for (i, func) in self.funcs.iter().enumerate() {
+            println!(
+                "{}",
+                format!("============ Function {} ============", i)
+                    .bright_yellow()
+                    .bold()
+            );
+
+            for i in func.opcodes.iter() {
+                println!("{:?}", i);
+            }
+        }
+    }
 }

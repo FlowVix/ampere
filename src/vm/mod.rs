@@ -188,6 +188,9 @@ impl Vm {
                 Opcode::PopTop => {
                     self.pop();
                 }
+                Opcode::PushUnit => {
+                    self.push_value(Value::unit().into_stored(opcode!(Area)));
+                }
             }
 
             pos += 1;
