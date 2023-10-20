@@ -22,49 +22,6 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn to_str(&self, vm: &Vm) -> String {
-        match self {
-            Value::Int(v) => v.to_string(),
-            Value::Float(v) => v.to_string(),
-            Value::Bool(v) => v.to_string(),
-            Value::String(v) => v.clone(),
-            Value::Array(v) => format!(
-                "[{}]",
-                v.iter().map(|v| vm.memory[*v].value.to_str(vm)).join(", ")
-            ),
-            Value::Tuple(v) => format!(
-                "({})",
-                v.iter().map(|v| vm.memory[*v].value.to_str(vm)).join(", ")
-            ),
-            Value::Type(t) => format!("<{}>", t.name()),
-            // Value::Function {
-            //     params, ret_type, ..
-            // } => {
-            //     format!(
-            //         "({}){} => ...",
-            //         params
-            //             .iter()
-            //             .map(|(pat, typ)| {
-            //                 format!(
-            //                     "{}{}",
-            //                     pat.to_str(),
-            //                     if let Some(t) = typ {
-            //                         format!(": {}", t.borrow().value.to_str())
-            //                     } else {
-            //                         "".into()
-            //                     }
-            //                 )
-            //             })
-            //             .join(", "),
-            //         if let Some(t) = ret_type {
-            //             format!("-> {}", t.borrow().value.to_str())
-            //         } else {
-            //             "".into()
-            //         },
-            //     )
-            // }
-        }
-    }
     pub fn into_stored(self, def_area: CodeArea) -> StoredValue {
         StoredValue {
             value: self,

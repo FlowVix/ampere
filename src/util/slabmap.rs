@@ -25,6 +25,12 @@ impl<K, V> SlabMap<K, V> {
             _p: PhantomData,
         }
     }
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            slab: Slab::with_capacity(capacity),
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<K, V> SlabMap<K, V>

@@ -8,12 +8,17 @@ use std::{
 };
 
 use colored::Colorize;
+use itertools::Itertools;
 use lasso::Rodeo;
 // use interpreter::{value::Value, Interpreter};
 use lexer::Lexer;
 use parser::Parser;
 
-use crate::compiler::Compiler;
+use crate::{
+    compiler::Compiler,
+    util::slabmap::SlabMap,
+    vm::{RunInfo, Vm},
+};
 
 mod compiler;
 mod error;
@@ -48,9 +53,40 @@ fn main() {
         }
     };
 
-    match Compiler::new_compile_file(&stmts, &src, &mut interner, (0..code.len()).into()) {
+    let code = match Compiler::new_compile_file(&stmts, &src, &mut interner, (0..code.len()).into())
+    {
         Ok(c) => {
-            c.build(&src).display();
+            let b = c.build(&src);
+            b.display();
+            b
+        }
+        Err(err) => {
+            err.into_report().display();
+            std::process::exit(1);
+        }
+    };
+
+    let program = vec![code].into();
+
+    let mut vm = Vm {
+        memory: SlabMap::new(),
+        stack: vec![],
+    };
+    println!("{}", "------------------------------".dimmed());
+    match vm.run_func(RunInfo {
+        program: &program,
+        bytecode_idx: 0,
+        func_idx: 0,
+    }) {
+        Ok(_) => {
+            // println!(
+            //     "{} {}",
+            //     "Stack:".bright_blue().bold(),
+            //     vm.stack
+            //         .iter()
+            //         .map(|v| vm.memory[*v].value.to_str(&vm))
+            //         .join(&", ".dimmed().to_string())
+            // );
         }
         Err(err) => {
             err.into_report().display();

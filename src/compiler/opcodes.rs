@@ -81,4 +81,9 @@ pub enum Opcode {
     Jump(OpcodePos),
     JumpIfFalse(OpcodePos),
     JumpIfTrue(OpcodePos),
+
+    WrapArray(u16),
+    WrapTuple(u16),
+
+    Dbg,
 }

@@ -4,6 +4,7 @@ use super::{
     bytecode::Constant,
     opcodes::{Opcode, VarID},
     proto::{Block, BlockContent, BlockID, JumpType, ProtoBytecode, ProtoFunc, ProtoOpcode},
+    CompileResult,
 };
 
 pub struct CodeBuilder<'a> {
@@ -19,10 +20,24 @@ impl<'a> CodeBuilder<'a> {
     fn current_block(&mut self) -> &mut Block {
         &mut self.proto_bytecode.blocks[self.block]
     }
-    pub fn new_var(&mut self) -> VarID {
+    pub fn next_var_id(&mut self) -> VarID {
         let v = self.current_func().var_count.into();
         self.current_func().var_count += 1;
         v
+    }
+    pub fn new_block<F: FnOnce(&mut CodeBuilder) -> CompileResult<()>>(
+        &mut self,
+        f: F,
+    ) -> CompileResult<()> {
+        let f_block = self.proto_bytecode.blocks.insert(Default::default());
+
+        self.current_block().push(BlockContent::Block(f_block));
+
+        f(&mut CodeBuilder {
+            block: f_block,
+            func: self.func,
+            proto_bytecode: self.proto_bytecode,
+        })
     }
 
     pub fn load_const(&mut self, c: Constant, span: CodeSpan) {

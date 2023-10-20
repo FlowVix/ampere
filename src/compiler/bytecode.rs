@@ -60,8 +60,8 @@ impl Bytecode {
                     .bold()
             );
 
-            for i in func.opcodes.iter() {
-                println!("{:?}", i);
+            for (i, opcode) in func.opcodes.iter().enumerate() {
+                println!("{}: {:?}", i, opcode);
             }
         }
     }

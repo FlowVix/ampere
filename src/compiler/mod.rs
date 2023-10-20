@@ -5,7 +5,10 @@ use lasso::{Rodeo, Spur};
 
 use crate::{
     parser::{
-        ast::{ExprNode, ExprType, LetPatternNode, LetPatternType, StmtNode, StmtType, Stmts},
+        ast::{
+            AssignPatternNode, AssignPatternType, ExprNode, ExprType, LetPatternNode,
+            LetPatternType, StmtNode, StmtType, Stmts,
+        },
         operators::{BinOp, UnaryOp},
     },
     source::{AmpereSource, CodeArea, CodeSpan},
@@ -16,8 +19,8 @@ use self::{
     builder::CodeBuilder,
     bytecode::Constant,
     error::CompilerError,
-    opcodes::Opcode,
-    proto::ProtoBytecode,
+    opcodes::{Opcode, VarID},
+    proto::{JumpType, ProtoBytecode},
     scope::{Scope, ScopeID, VarData},
 };
 
@@ -56,11 +59,32 @@ impl<'a> Compiler<'a> {
             },
         }
     }
+    pub fn new_var(
+        &mut self,
+        var: Spur,
+        def_span: CodeSpan,
+        scope: ScopeID,
+        builder: &mut CodeBuilder,
+    ) -> VarID {
+        let id = builder.next_var_id();
+        self.scopes[scope]
+            .vars
+            .insert(var, VarData { def_span, id });
+        id
+    }
     pub fn make_area(&self, span: CodeSpan) -> CodeArea {
         CodeArea {
             span,
             src: self.src.clone(),
         }
+    }
+
+    pub fn derive_scope(&mut self, scope: ScopeID) -> ScopeID {
+        let new = Scope {
+            vars: AHashMap::new(),
+            parent: Some(scope),
+        };
+        self.scopes.insert(new)
     }
 
     pub fn do_let(
@@ -69,13 +93,37 @@ impl<'a> Compiler<'a> {
         builder: &mut CodeBuilder,
         scope: ScopeID,
     ) -> CompileResult<()> {
-        match pat.typ {
+        match &pat.typ {
             LetPatternType::Var(v) => {
-                let id = builder.new_var();
+                let id = self.new_var(*v, pat.span, scope, builder);
                 builder.push_raw_opcode(Opcode::SetVar(id), pat.span);
             }
             LetPatternType::ArrayDestructure(_) => todo!(),
             LetPatternType::TupleDestructure(_) => todo!(),
+        }
+        Ok(())
+    }
+
+    pub fn do_assign(
+        &mut self,
+        pat: &AssignPatternNode,
+        builder: &mut CodeBuilder,
+        scope: ScopeID,
+    ) -> CompileResult<()> {
+        match &pat.typ {
+            AssignPatternType::Path { var, path } => match self.get_var(var, scope) {
+                Some(v) => {
+                    builder.push_raw_opcode(Opcode::SetVar(v.id), pat.span);
+                }
+                None => {
+                    return Err(CompilerError::NonexistentVariable(
+                        self.resolve(var).into(),
+                        self.make_area(pat.span),
+                    ))
+                }
+            },
+            AssignPatternType::ArrayDestructure(_) => todo!(),
+            AssignPatternType::TupleDestructure(_) => todo!(),
         }
         Ok(())
     }
@@ -131,15 +179,66 @@ impl<'a> Compiler<'a> {
             ExprType::Member { base, member } => todo!(),
             ExprType::Associated { base, member } => todo!(),
             ExprType::Call { base, args } => todo!(),
-            ExprType::Array(_) => todo!(),
-            ExprType::Tuple(_) => todo!(),
-            ExprType::Block(_) => todo!(),
+            ExprType::Array(v) => {
+                for i in v {
+                    self.compile_expr(i, builder, scope)?;
+                }
+                builder.push_raw_opcode(Opcode::WrapArray(v.len() as u16), expr.span);
+            }
+            ExprType::Tuple(v) => {
+                for i in v {
+                    self.compile_expr(i, builder, scope)?;
+                }
+                builder.push_raw_opcode(Opcode::WrapTuple(v.len() as u16), expr.span);
+            }
+            ExprType::Block(v) => {
+                let derived = self.derive_scope(scope);
+                self.compile_stmts(v, builder, derived, expr.span)?;
+            }
             ExprType::If {
                 cond,
                 then,
                 otherwise,
-            } => todo!(),
-            ExprType::While { cond, body } => todo!(),
+            } => {
+                builder.new_block(|builder| {
+                    let outer = builder.block;
+
+                    builder.new_block(|builder| {
+                        let derived = self.derive_scope(scope);
+
+                        self.compile_expr(cond, builder, derived)?;
+                        builder.push_jump(None, JumpType::EndIfFalse, expr.span);
+
+                        self.compile_expr(then, builder, derived)?;
+                        builder.push_jump(Some(outer), JumpType::End, expr.span);
+                        Ok(())
+                    })?;
+                    if let Some(s) = otherwise {
+                        let derived = self.derive_scope(scope);
+
+                        self.compile_expr(s, builder, derived)?;
+                    } else {
+                        builder.push_raw_opcode(Opcode::PushUnit, expr.span);
+                    }
+
+                    Ok(())
+                })?;
+            }
+            ExprType::While { cond, body } => {
+                builder.push_raw_opcode(Opcode::PushUnit, expr.span);
+
+                builder.new_block(|builder| {
+                    let derived = self.derive_scope(scope);
+
+                    self.compile_expr(cond, builder, derived)?;
+                    builder.push_jump(None, JumpType::EndIfFalse, expr.span);
+                    builder.push_raw_opcode(Opcode::PopTop, expr.span);
+
+                    self.compile_expr(body, builder, derived)?;
+                    builder.push_jump(None, JumpType::Start, expr.span);
+                    Ok(())
+                })?;
+            }
             ExprType::Function {
                 params,
                 ret_type,
@@ -165,11 +264,18 @@ impl<'a> Compiler<'a> {
                 return Ok(());
             }
             StmtType::Let(pat, v) => {
+                self.compile_expr(v, builder, scope)?;
                 self.do_let(pat, builder, scope)?;
             }
-            StmtType::Assign(_, _) => todo!(),
+            StmtType::Assign(pat, v) => {
+                self.compile_expr(v, builder, scope)?;
+                self.do_assign(pat, builder, scope)?;
+            }
             StmtType::AssignOp(_, _, _) => todo!(),
-            StmtType::Dbg(_) => todo!(),
+            StmtType::Dbg(v) => {
+                self.compile_expr(v, builder, scope)?;
+                builder.push_raw_opcode(Opcode::Dbg, stmt.span);
+            }
         }
 
         if ret {

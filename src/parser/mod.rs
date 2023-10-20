@@ -471,6 +471,7 @@ impl<'a> Parser<'a> {
 
                 match self.parse_assign_pattern() {
                     Ok(pat) => {
+                        println!("ga");
                         let tok = self.peek()?;
                         if tok == Token::Assign {
                             self.next()?;
@@ -481,6 +482,7 @@ impl<'a> Parser<'a> {
                             let e = self.parse_expr()?;
                             StmtType::AssignOp(pat, op, e)
                         } else {
+                            self.lexer = old_lexer;
                             let e = self.parse_expr()?;
                             StmtType::Expr(e)
                         }
