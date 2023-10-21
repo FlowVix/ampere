@@ -10,6 +10,7 @@ use crate::{
     },
     source::{AmpereSource, CodeSpan},
     util::ImmutVec,
+    vm::value::ValueType,
 };
 
 use self::{
@@ -80,6 +81,10 @@ impl Vm {
     #[inline]
     pub fn pop(&mut self) -> MemKey {
         self.stack.pop().unwrap()
+    }
+    #[inline]
+    pub fn last(&self) -> MemKey {
+        *self.stack.last().unwrap()
     }
     #[inline]
     pub fn try_pop(&mut self) -> Option<MemKey> {
@@ -213,8 +218,39 @@ impl Vm {
                     self.push_value(Value::Tuple(v).into_stored(opcode!(Area)));
                 }
                 Opcode::Dbg => {
-                    let v = self.pop();
+                    let v = self.last();
                     println!("{}", self.value_str(v, true))
+                }
+                o @ (Opcode::UnwrapArray(len) | Opcode::UnwrapTuple(len)) => {
+                    let top = self.pop();
+                    let top = self.get(top);
+
+                    match (&top.value, matches!(o, Opcode::UnwrapTuple(_))) {
+                        (Value::Array(v), false) | (Value::Tuple(v), true) => {
+                            if v.len() != len as usize {
+                                return Err(RuntimeError::DestructureLenMismatch {
+                                    expected: len as usize,
+                                    found: v.len(),
+                                    val_area: top.def_area.clone(),
+                                    area: opcode!(Area),
+                                });
+                            }
+                            for i in v.clone() {
+                                self.push_key(i)
+                            }
+                        }
+                        (_, t) => {
+                            return Err(RuntimeError::TypeMismatch {
+                                v: (top.value.get_type(), top.def_area.clone()),
+                                expected: if t {
+                                    ValueType::Tuple
+                                } else {
+                                    ValueType::Array
+                                },
+                                area: opcode!(Area),
+                            })
+                        }
+                    };
                 }
             }
 
@@ -225,7 +261,7 @@ impl Vm {
     }
 
     pub fn value_str(&self, k: MemKey, debug: bool) -> String {
-        let s = match &self.memory[k].value {
+        let s = match &self.get(k).value {
             Value::Int(v) => v.to_string(),
             Value::Float(v) => v.to_string(),
             Value::Bool(v) => v.to_string(),

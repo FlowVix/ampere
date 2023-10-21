@@ -1,7 +1,5 @@
 
 
-let a = 0;
-while a < 1000000 {
-    a = a + 1;
-};
-dbg a;
+
+let a = (x, y) -> int => x + y;
+

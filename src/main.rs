@@ -44,7 +44,7 @@ fn main() {
 
     let stmts = match parser.parse() {
         Ok(v) => {
-            // println!("{}", format!("{:#?}", v).bright_green().bold());
+            println!("{}", format!("{:#?}", v).bright_green().bold());
             v
         }
         Err(err) => {

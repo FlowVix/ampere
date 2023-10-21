@@ -59,6 +59,8 @@ pub enum ExprType {
         ret_type: Option<Box<ExprNode>>,
         body: Box<ExprNode>,
     },
+
+    Dbg(Box<ExprNode>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -74,8 +76,6 @@ pub enum StmtType {
     Let(LetPatternNode, ExprNode),
     Assign(AssignPatternNode, ExprNode),
     AssignOp(AssignPatternNode, AssignOp, ExprNode),
-
-    Dbg(ExprNode),
 }
 
 #[derive(Debug, Clone, PartialEq)]

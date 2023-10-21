@@ -258,6 +258,12 @@ impl<'a> Parser<'a> {
                 }
                 Token::Identifier => ExprType::Var(self.slice_interned()),
 
+                Token::Dbg => {
+                    let v = self.parse_expr()?;
+
+                    ExprType::Dbg(Box::new(v))
+                }
+
                 Token::OpenParen => {
                     let old_lexer = self.lexer.clone();
                     let mut depth = 1usize;
@@ -457,13 +463,6 @@ impl<'a> Parser<'a> {
                 self.expect_tok(Token::Assign)?;
                 let expr = self.parse_expr()?;
                 StmtType::Let(pat, expr)
-            }
-            Token::Dbg => {
-                self.next()?;
-
-                let v = self.parse_expr()?;
-
-                StmtType::Dbg(v)
             }
             _ => {
                 // let mut check = self.clone();

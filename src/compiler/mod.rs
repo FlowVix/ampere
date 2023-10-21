@@ -98,8 +98,18 @@ impl<'a> Compiler<'a> {
                 let id = self.new_var(*v, pat.span, scope, builder);
                 builder.push_raw_opcode(Opcode::SetVar(id), pat.span);
             }
-            LetPatternType::ArrayDestructure(_) => todo!(),
-            LetPatternType::TupleDestructure(_) => todo!(),
+            LetPatternType::ArrayDestructure(pats) => {
+                builder.push_raw_opcode(Opcode::UnwrapArray(pats.len() as u16), pat.span);
+                for pat in pats.iter().rev() {
+                    self.do_let(pat, builder, scope)?;
+                }
+            }
+            LetPatternType::TupleDestructure(pats) => {
+                builder.push_raw_opcode(Opcode::UnwrapTuple(pats.len() as u16), pat.span);
+                for pat in pats.iter().rev() {
+                    self.do_let(pat, builder, scope)?;
+                }
+            }
         }
         Ok(())
     }
@@ -122,8 +132,18 @@ impl<'a> Compiler<'a> {
                     ))
                 }
             },
-            AssignPatternType::ArrayDestructure(_) => todo!(),
-            AssignPatternType::TupleDestructure(_) => todo!(),
+            AssignPatternType::ArrayDestructure(pats) => {
+                builder.push_raw_opcode(Opcode::UnwrapArray(pats.len() as u16), pat.span);
+                for pat in pats.iter().rev() {
+                    self.do_assign(pat, builder, scope)?;
+                }
+            }
+            AssignPatternType::TupleDestructure(pats) => {
+                builder.push_raw_opcode(Opcode::UnwrapTuple(pats.len() as u16), pat.span);
+                for pat in pats.iter().rev() {
+                    self.do_assign(pat, builder, scope)?;
+                }
+            }
         }
         Ok(())
     }
@@ -244,6 +264,10 @@ impl<'a> Compiler<'a> {
                 ret_type,
                 body,
             } => todo!(),
+            ExprType::Dbg(v) => {
+                self.compile_expr(v, builder, scope)?;
+                builder.push_raw_opcode(Opcode::Dbg, expr.span);
+            }
         }
 
         Ok(())
@@ -272,10 +296,6 @@ impl<'a> Compiler<'a> {
                 self.do_assign(pat, builder, scope)?;
             }
             StmtType::AssignOp(_, _, _) => todo!(),
-            StmtType::Dbg(v) => {
-                self.compile_expr(v, builder, scope)?;
-                builder.push_raw_opcode(Opcode::Dbg, stmt.span);
-            }
         }
 
         if ret {

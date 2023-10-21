@@ -86,4 +86,7 @@ pub enum Opcode {
     WrapTuple(u16),
 
     Dbg,
+
+    UnwrapArray(u16),
+    UnwrapTuple(u16),
 }
