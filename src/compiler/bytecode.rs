@@ -8,7 +8,7 @@ use crate::{
     util::{ImmutStr, ImmutVec},
 };
 
-use super::opcodes::Opcode;
+use super::opcodes::{Opcode, VarID};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Constant {
@@ -33,6 +33,7 @@ impl Hash for Constant {
 pub struct Function {
     pub opcodes: ImmutVec<Opcode>,
     pub var_count: u16,
+    pub captured: ImmutVec<(VarID, VarID)>,
     pub opcode_spans: ImmutVec<CodeSpan>,
 }
 
@@ -58,6 +59,16 @@ impl Bytecode {
                 format!("============ Function {} ============", i)
                     .bright_yellow()
                     .bold()
+            );
+            println!(
+                "{}{}",
+                "- var count: ".dimmed(),
+                func.var_count.to_string().bright_blue()
+            );
+            println!(
+                "{}{}",
+                "- captured: ".dimmed(),
+                format!("{:?}", func.captured).bright_blue()
             );
 
             for (i, opcode) in func.opcodes.iter().enumerate() {

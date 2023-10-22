@@ -12,7 +12,7 @@ use crate::{
 use super::{
     builder::CodeBuilder,
     bytecode::{Bytecode, Constant},
-    opcodes::Opcode,
+    opcodes::{Opcode, VarID},
     CompileResult,
 };
 
@@ -62,6 +62,7 @@ pub enum BlockContent {
 pub struct ProtoFunc {
     pub code: BlockID,
     pub var_count: u16,
+    pub captured: Vec<(VarID, VarID)>,
 }
 
 pub type Block = Vec<BlockContent>;
@@ -76,19 +77,21 @@ pub struct ProtoBytecode {
 impl ProtoBytecode {
     pub fn new_func<F>(&mut self, f: F, span: CodeSpan) -> CompileResult<FuncID>
     where
-        F: FnOnce(&mut CodeBuilder) -> CompileResult<()>,
+        F: FnOnce(&mut CodeBuilder) -> CompileResult<Vec<(VarID, VarID)>>,
     {
         let f_block = self.blocks.insert(Default::default());
         self.functions.push(ProtoFunc {
             code: f_block,
             var_count: 0,
+            captured: vec![],
         });
         let func = self.functions.len() - 1;
-        f(&mut CodeBuilder {
+        let captured = f(&mut CodeBuilder {
             func,
             proto_bytecode: self,
             block: f_block,
         })?;
+        self.functions[func].captured = captured;
         Ok(func.into())
     }
 
@@ -175,6 +178,7 @@ impl ProtoBytecode {
                 opcodes: opcodes.into(),
                 var_count: func.var_count,
                 opcode_spans: opcode_spans.into(),
+                captured: func.captured.clone().into(),
             })
         }
 

@@ -1,5 +1,15 @@
 
 
+let a = 0;
+let f = (x) => {
+    a = a + x;
+    dbg a;
+};
+todo fix this
 
-let a = (x, y) -> int => x + y;
+f(5);
+f(8);
+
+
+
 

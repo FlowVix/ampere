@@ -31,6 +31,16 @@ pub enum RuntimeError {
         val_area: CodeArea,
         area: CodeArea,
     },
+    CannotCall {
+        v: (ValueType, CodeArea),
+        area: CodeArea,
+    },
+    IncorrectArgAmount {
+        expected: usize,
+        found: usize,
+        val_area: CodeArea,
+        area: CodeArea,
+    },
 }
 
 impl RuntimeError {
@@ -89,6 +99,31 @@ impl RuntimeError {
                         special_fmt!("Expected {} elements, found {}", expected, found),
                     ),
                     (val_area, special_fmt!("This has {} elements", found)),
+                ],
+            ),
+            RuntimeError::CannotCall { v, area } => (
+                "Cannot call",
+                vec![
+                    (area, special_fmt!("Cannot call {}", v.0.name())),
+                    (v.1, special_fmt!("This is of type {}", v.0.name())),
+                ],
+            ),
+            RuntimeError::IncorrectArgAmount {
+                expected,
+                found,
+                val_area,
+                area,
+            } => (
+                "Incorrect amount of arguments",
+                vec![
+                    (
+                        area,
+                        special_fmt!("Expected {} arguments, found {}", expected, found),
+                    ),
+                    (
+                        val_area,
+                        special_fmt!("Function defined to take {} arguments here", found),
+                    ),
                 ],
             ),
         };

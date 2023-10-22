@@ -411,6 +411,19 @@ impl<'a> Parser<'a> {
                         member,
                     }
                 }
+                Token::OpenParen => {
+                    self.next()?;
+                    let mut args = vec![];
+
+                    list_helper! {self, ClosedParen {
+                        args.push(self.parse_expr()?);
+                    }}
+
+                    ExprType::Call {
+                        base: Box::new(out),
+                        args,
+                    }
+                }
                 _ => break,
             };
             out = ExprNode {

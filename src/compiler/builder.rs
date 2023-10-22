@@ -3,7 +3,9 @@ use crate::source::CodeSpan;
 use super::{
     bytecode::Constant,
     opcodes::{Opcode, VarID},
-    proto::{Block, BlockContent, BlockID, JumpType, ProtoBytecode, ProtoFunc, ProtoOpcode},
+    proto::{
+        Block, BlockContent, BlockID, FuncID, JumpType, ProtoBytecode, ProtoFunc, ProtoOpcode,
+    },
     CompileResult,
 };
 
@@ -25,6 +27,14 @@ impl<'a> CodeBuilder<'a> {
         self.current_func().var_count += 1;
         v
     }
+
+    pub fn new_func<F>(&mut self, f: F, span: CodeSpan) -> CompileResult<FuncID>
+    where
+        F: FnOnce(&mut CodeBuilder) -> CompileResult<Vec<(VarID, VarID)>>,
+    {
+        self.proto_bytecode.new_func(f, span)
+    }
+
     pub fn new_block<F: FnOnce(&mut CodeBuilder) -> CompileResult<()>>(
         &mut self,
         f: F,

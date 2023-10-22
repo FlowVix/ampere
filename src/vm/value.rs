@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
 use crate::{
-    compiler::bytecode::Constant,
+    compiler::{bytecode::Constant, proto::FuncID},
     parser::ast::{ExprNode, LetPatternNode},
     source::CodeArea,
 };
@@ -19,6 +19,13 @@ pub enum Value {
     Tuple(Vec<MemKey>),
 
     Type(ValueType),
+
+    Function {
+        func: FuncID,
+        param_types: Vec<Option<MemKey>>,
+        ret_type: Option<MemKey>,
+        captured: Vec<MemKey>,
+    },
 }
 
 impl Value {
@@ -54,7 +61,7 @@ impl Value {
             Value::Array(_) => ValueType::Array,
             Value::Tuple(_) => ValueType::Tuple,
             Value::Type(_) => ValueType::Type,
-            // Value::Function { .. } => ValueType::Function,
+            Value::Function { .. } => ValueType::Function,
         }
     }
     pub fn unit() -> Self {
@@ -71,7 +78,7 @@ pub enum ValueType {
     Array,
     Tuple,
     Type,
-    // Function,
+    Function,
 }
 
 impl ValueType {
@@ -84,7 +91,7 @@ impl ValueType {
             ValueType::Array => "array".into(),
             ValueType::Tuple => "tuple".into(),
             ValueType::Type => "type".into(),
-            // ValueType::Function => "function".into(),
+            ValueType::Function => "function".into(),
         }
     }
 }

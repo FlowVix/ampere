@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use ahash::AHashMap;
+use itertools::Itertools;
 use lasso::{Rodeo, Spur};
 
 use crate::{
@@ -57,6 +58,18 @@ impl<'a> Compiler<'a> {
                 Some(s) => self.get_var(var, s),
                 None => None,
             },
+        }
+    }
+    pub fn for_accessible_vars<F>(&self, scope: ScopeID, f: &mut F)
+    where
+        F: FnMut(Spur, VarData),
+    {
+        let s = &self.scopes[scope];
+        if let Some(t) = s.parent {
+            self.for_accessible_vars(t, f);
+        }
+        for (&a, &b) in &s.vars {
+            f(a, b)
         }
     }
     pub fn new_var(
@@ -198,7 +211,13 @@ impl<'a> Compiler<'a> {
             ExprType::Index { base, index } => todo!(),
             ExprType::Member { base, member } => todo!(),
             ExprType::Associated { base, member } => todo!(),
-            ExprType::Call { base, args } => todo!(),
+            ExprType::Call { base, args } => {
+                self.compile_expr(base, builder, scope)?;
+                for i in args {
+                    self.compile_expr(i, builder, scope)?;
+                }
+                builder.push_raw_opcode(Opcode::Call(args.len() as u16), expr.span);
+            }
             ExprType::Array(v) => {
                 for i in v {
                     self.compile_expr(i, builder, scope)?;
@@ -263,7 +282,48 @@ impl<'a> Compiler<'a> {
                 params,
                 ret_type,
                 body,
-            } => todo!(),
+            } => {
+                let mut captured_names = AHashMap::new();
+                self.for_accessible_vars(scope, &mut |name, data| {
+                    captured_names.insert(name, data);
+                });
+
+                let id = builder.new_func(
+                    |builder| {
+                        let func_scope = self.scopes.insert(Scope {
+                            vars: AHashMap::new(),
+                            parent: None,
+                        });
+                        let mut captured_map = vec![];
+
+                        for (name, data) in captured_names {
+                            let new_id = self.new_var(name, data.def_span, func_scope, builder);
+                            captured_map.push((data.id, new_id));
+                        }
+
+                        for (pat, _) in params.iter().rev() {
+                            self.do_let(pat, builder, func_scope)?;
+                        }
+
+                        self.compile_expr(body, builder, func_scope)?;
+
+                        Ok(captured_map)
+                    },
+                    expr.span,
+                )?;
+                builder.push_raw_opcode(Opcode::PushFunc(id), expr.span);
+                builder.push_raw_opcode(Opcode::SetArgAmount(params.len() as u16), expr.span);
+                for (idx, (_, t)) in params.iter().enumerate() {
+                    if let Some(t) = t {
+                        self.compile_expr(t, builder, scope)?;
+                        builder.push_raw_opcode(Opcode::SetArgType(idx as u16), t.span);
+                    }
+                }
+                if let Some(t) = ret_type {
+                    self.compile_expr(t, builder, scope)?;
+                    builder.push_raw_opcode(Opcode::SetReturnType, t.span);
+                }
+            }
             ExprType::Dbg(v) => {
                 self.compile_expr(v, builder, scope)?;
                 builder.push_raw_opcode(Opcode::Dbg, expr.span);
@@ -347,8 +407,10 @@ impl<'a> Compiler<'a> {
                     parent: None,
                 });
                 compiler.compile_stmts(stmts, builder, global_scope, span)?;
-                Ok(())
+                Ok(vec![])
             },
+            // vec![],
+            // false,
             span,
         )?;
 

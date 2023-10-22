@@ -8,7 +8,7 @@ use crate::{
         bytecode::{Bytecode, Constant, Function},
         opcodes::Opcode,
     },
-    source::{AmpereSource, CodeSpan},
+    source::{AmpereSource, CodeArea, CodeSpan},
     util::ImmutVec,
     vm::value::ValueType,
 };
@@ -123,7 +123,7 @@ impl Vm {
         })
     }
 
-    pub fn run_func(&mut self, info: RunInfo) -> RuntimeResult<()> {
+    pub fn run_func(&mut self, info: RunInfo, vars: Option<Vec<MemKey>>) -> RuntimeResult<()> {
         let mut pos = 0;
 
         macro_rules! opcode {
@@ -135,7 +135,7 @@ impl Vm {
             };
         }
 
-        let mut vars = vec![0.into(); info.func().var_count as usize];
+        let mut vars = vars.unwrap_or_else(|| vec![0.into(); info.func().var_count as usize]);
 
         macro_rules! bin_op {
             ($fn:ident) => {{
@@ -252,6 +252,54 @@ impl Vm {
                         }
                     };
                 }
+                Opcode::PushFunc(id) => {
+                    self.push_value(
+                        Value::Function {
+                            func: id,
+                            param_types: vec![],
+                            ret_type: None,
+                            captured: info.bytecode().funcs[*id as usize]
+                                .captured
+                                .iter()
+                                .map(|(from, _)| vars[**from as usize])
+                                .collect(),
+                        }
+                        .into_stored(opcode!(Area)),
+                    );
+                }
+                Opcode::SetArgAmount(n) => {
+                    if let Value::Function { param_types, .. } =
+                        &mut self.get_mut(self.last()).value
+                    {
+                        *param_types = vec![None; n as usize]
+                    };
+                }
+                Opcode::SetArgType(arg) => {
+                    let t = self.pop();
+                    if let Value::Function { param_types, .. } =
+                        &mut self.get_mut(self.last()).value
+                    {
+                        param_types[arg as usize] = Some(t)
+                    };
+                }
+                Opcode::SetReturnType => {
+                    let t = self.pop();
+                    if let Value::Function { ret_type, .. } = &mut self.get_mut(self.last()).value {
+                        *ret_type = Some(t)
+                    };
+                }
+                Opcode::Call(args) => {
+                    // let mut v = vec![0.into(); args as usize];
+
+                    // for i in (0..args).rev() {
+                    //     let k = self.pop();
+                    //     v[i as usize] = k;
+                    // }
+
+                    // let base = self.pop();
+
+                    self.call_value(args as usize, opcode!(Area), info)?;
+                }
             }
 
             pos += 1;
@@ -275,36 +323,89 @@ impl Vm {
                 v.iter().map(|v| self.value_str(*v, debug)).join(", ")
             ),
             Value::Type(t) => format!("<{}>", t.name()),
-            // Value::Function {
-            //     params, ret_type, ..
-            // } => {
-            //     format!(
-            //         "({}){} => ...",
-            //         params
-            //             .iter()
-            //             .map(|(pat, typ)| {
-            //                 format!(
-            //                     "{}{}",
-            //                     pat.to_str(),
-            //                     if let Some(t) = typ {
-            //                         format!(": {}", t.borrow().value.to_str())
-            //                     } else {
-            //                         "".into()
-            //                     }
-            //                 )
-            //             })
-            //             .join(", "),
-            //         if let Some(t) = ret_type {
-            //             format!("-> {}", t.borrow().value.to_str())
-            //         } else {
-            //             "".into()
-            //         },
-            //     )
-            // }
+            Value::Function {
+                ret_type,
+                param_types,
+                ..
+            } => {
+                format!(
+                    "({}){} => ...",
+                    param_types
+                        .iter()
+                        .map(|v| if let Some(t) = v {
+                            self.value_str(*t, debug)
+                        } else {
+                            "_".into()
+                        })
+                        .join(", "),
+                    if let Some(t) = ret_type {
+                        format!("-> {}", self.value_str(*t, debug))
+                    } else {
+                        "".into()
+                    },
+                )
+            }
         };
         if !debug {
             return s;
         }
         format!("{}{}", s, format!("::k{:?}", k.0).dimmed())
+    }
+
+    pub fn call_value(
+        &mut self,
+        arg_amount: usize,
+        call_area: CodeArea,
+        info: RunInfo,
+    ) -> RuntimeResult<()> {
+        // {
+        //     let l = self.stack.len();
+        //     self.stack[(l - 1 - arg_amount)..].rotate_left(1);
+        // }
+        // self.stack.remo
+
+        let base = self.stack.remove(self.stack.len() - 1 - arg_amount);
+        let base = &self.memory[base];
+        match &base.value {
+            Value::Function {
+                func,
+                param_types,
+                ret_type,
+                captured,
+            } => {
+                if arg_amount != param_types.len() {
+                    return Err(RuntimeError::DestructureLenMismatch {
+                        expected: arg_amount,
+                        found: param_types.len(),
+                        val_area: base.def_area.clone(),
+                        area: call_area,
+                    });
+                }
+                let new_info = RunInfo {
+                    func_idx: **func as usize,
+                    ..info
+                };
+
+                let mut vars = vec![0.into(); new_info.func().var_count as usize];
+                for (k, (_, to)) in captured.iter().zip(new_info.func().captured.iter()) {
+                    vars[**to as usize] = *k;
+                }
+
+                self.run_func(
+                    RunInfo {
+                        func_idx: **func as usize,
+                        ..info
+                    },
+                    Some(vars),
+                )?;
+            }
+            _ => {
+                return Err(RuntimeError::CannotCall {
+                    v: (base.value.get_type(), base.def_area.clone()),
+                    area: call_area,
+                })
+            }
+        }
+        Ok(())
     }
 }

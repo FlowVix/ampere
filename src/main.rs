@@ -44,7 +44,7 @@ fn main() {
 
     let stmts = match parser.parse() {
         Ok(v) => {
-            println!("{}", format!("{:#?}", v).bright_green().bold());
+            // println!("{}", format!("{:#?}", v).bright_green().bold());
             v
         }
         Err(err) => {
@@ -73,11 +73,14 @@ fn main() {
         stack: vec![],
     };
     println!("{}", "------------------------------".dimmed());
-    match vm.run_func(RunInfo {
-        program: &program,
-        bytecode_idx: 0,
-        func_idx: 0,
-    }) {
+    match vm.run_func(
+        RunInfo {
+            program: &program,
+            bytecode_idx: 0,
+            func_idx: 0,
+        },
+        None,
+    ) {
         Ok(_) => {
             // println!(
             //     "{} {}",
@@ -93,16 +96,4 @@ fn main() {
             std::process::exit(1);
         }
     }
-
-    // let result = match Interpreter::new_run_file(&stmts, &src) {
-    //     Ok(v) => v,
-    //     Err(err) => {
-    //         err.into_report().display();
-    //         std::process::exit(1);
-    //     }
-    // };
-    // .map(|v| v.value)
-    // .unwrap_or(Value::unit());
-
-    // println!("{}", result.display().bright_green());
 }

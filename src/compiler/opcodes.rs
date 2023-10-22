@@ -1,3 +1,5 @@
+use super::proto::FuncID;
+
 #[macro_export]
 macro_rules! make_ids {
     (
@@ -89,4 +91,11 @@ pub enum Opcode {
 
     UnwrapArray(u16),
     UnwrapTuple(u16),
+
+    PushFunc(FuncID),
+    SetArgAmount(u16),
+    SetArgType(u16),
+    SetReturnType,
+
+    Call(u16),
 }
