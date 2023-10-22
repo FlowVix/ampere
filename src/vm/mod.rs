@@ -115,12 +115,25 @@ impl Vm {
             v => v,
         }
     }
-    pub fn deep_clone_key(&mut self, k: MemKey) -> MemKey {
+    pub fn deep_clone_stored(&mut self, k: MemKey) -> StoredValue {
         let v = self.deep_clone(k);
-        self.store_value(StoredValue {
+        StoredValue {
             value: v,
             def_area: self.get(k).def_area.clone(),
+        }
+    }
+    pub fn deep_clone_key(&mut self, k: MemKey) -> MemKey {
+        let v = self.deep_clone_stored(k);
+        self.store_value(v)
+    }
+    pub fn new_var_vec(&mut self, len: usize, info: RunInfo) -> Vec<MemKey> {
+        std::iter::from_fn(|| {
+            Some(self.store_value(
+                Value::unit().into_stored(CodeSpan::ZEROSPAN.into_area(info.src().clone())),
+            ))
         })
+        .take(len)
+        .collect()
     }
 
     pub fn run_func(&mut self, info: RunInfo, vars: Option<Vec<MemKey>>) -> RuntimeResult<()> {
@@ -135,7 +148,8 @@ impl Vm {
             };
         }
 
-        let mut vars = vars.unwrap_or_else(|| vec![0.into(); info.func().var_count as usize]);
+        let mut vars =
+            vars.unwrap_or_else(|| self.new_var_vec(info.func().var_count as usize, info));
 
         macro_rules! bin_op {
             ($fn:ident) => {{
@@ -156,7 +170,8 @@ impl Vm {
                 }
                 Opcode::SetVar(v) => {
                     let k = self.pop();
-                    vars[*v as usize] = self.deep_clone_key(k);
+                    self.memory[vars[*v as usize]] = self.deep_clone_stored(k);
+                    // vars[*v as usize] = self.deep_clone_key(k);
                 }
                 Opcode::LoadVar(v) => self.push_key(vars[*v as usize]),
                 Opcode::Plus => bin_op!(plus),
@@ -374,26 +389,28 @@ impl Vm {
                 captured,
             } => {
                 if arg_amount != param_types.len() {
-                    return Err(RuntimeError::DestructureLenMismatch {
-                        expected: arg_amount,
-                        found: param_types.len(),
+                    return Err(RuntimeError::IncorrectArgAmount {
+                        expected: param_types.len(),
+                        found: arg_amount,
                         val_area: base.def_area.clone(),
                         area: call_area,
                     });
                 }
+                let func = *func;
+                let captured = captured.clone();
                 let new_info = RunInfo {
-                    func_idx: **func as usize,
+                    func_idx: *func as usize,
                     ..info
                 };
 
-                let mut vars = vec![0.into(); new_info.func().var_count as usize];
+                let mut vars = self.new_var_vec(new_info.func().var_count as usize, new_info);
                 for (k, (_, to)) in captured.iter().zip(new_info.func().captured.iter()) {
                     vars[**to as usize] = *k;
                 }
 
                 self.run_func(
                     RunInfo {
-                        func_idx: **func as usize,
+                        func_idx: *func as usize,
                         ..info
                     },
                     Some(vars),

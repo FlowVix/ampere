@@ -1,15 +1,15 @@
 
 
-let a = 0;
 let f = (x) => {
-    a = a + x;
-    dbg a;
+    let a = 0;
+    () => {
+        a = a + x;
+        dbg a;
+    }
 };
-todo fix this
 
-f(5);
-f(8);
-
-
+let g = f(5);
+g();
+g();
 
 
