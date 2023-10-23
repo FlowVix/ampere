@@ -35,19 +35,31 @@ impl<'a> CodeBuilder<'a> {
         self.proto_bytecode.new_func(f, span)
     }
 
+    pub fn in_block<F: FnOnce(&mut CodeBuilder) -> CompileResult<()>>(
+        &mut self,
+        id: BlockID,
+        f: F,
+    ) -> CompileResult<()> {
+        let mut builder = CodeBuilder {
+            block: id,
+            func: self.func,
+            proto_bytecode: self.proto_bytecode,
+        };
+
+        f(&mut builder)
+    }
+
     pub fn new_block<F: FnOnce(&mut CodeBuilder) -> CompileResult<()>>(
         &mut self,
         f: F,
-    ) -> CompileResult<()> {
+    ) -> CompileResult<BlockID> {
         let f_block = self.proto_bytecode.blocks.insert(Default::default());
 
         self.current_block().push(BlockContent::Block(f_block));
 
-        f(&mut CodeBuilder {
-            block: f_block,
-            func: self.func,
-            proto_bytecode: self.proto_bytecode,
-        })
+        self.in_block(f_block, f)?;
+
+        Ok(f_block)
     }
 
     pub fn load_const(&mut self, c: Constant, span: CodeSpan) {

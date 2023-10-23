@@ -1,15 +1,13 @@
 
 
-let f = (x) => {
-    let a = 0;
-    () => {
-        a = a + x;
-        dbg a;
+let f = (n) => {
+    if n < 2 {
+        1
+    } else {
+        n * f(n - 1)
     }
 };
 
-let g = f(5);
-g();
-g();
+dbg f(6);
 
 

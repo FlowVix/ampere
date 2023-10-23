@@ -348,8 +348,17 @@ impl<'a> Compiler<'a> {
                 return Ok(());
             }
             StmtType::Let(pat, v) => {
-                self.compile_expr(v, builder, scope)?;
-                self.do_let(pat, builder, scope)?;
+                let b1 = builder.new_block(|_| Ok(()))?;
+                let b2 = builder.new_block(|_| Ok(()))?;
+
+                builder.in_block(b2, |builder| {
+                    self.do_let(pat, builder, scope)?;
+                    Ok(())
+                })?;
+                builder.in_block(b1, |builder| {
+                    self.compile_expr(v, builder, scope)?;
+                    Ok(())
+                })?;
             }
             StmtType::Assign(pat, v) => {
                 self.compile_expr(v, builder, scope)?;
