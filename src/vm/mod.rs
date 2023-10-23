@@ -234,7 +234,12 @@ impl Vm {
                 }
                 Opcode::Dbg => {
                     let v = self.last();
-                    println!("{}", self.value_str(v, true))
+                    println!(
+                        "{}{}{}",
+                        self.value_str(v, true),
+                        ", stack size: ".dimmed(),
+                        self.stack.len().to_string().bright_blue()
+                    )
                 }
                 o @ (Opcode::UnwrapArray(len) | Opcode::UnwrapTuple(len)) => {
                     let top = self.pop();
@@ -416,6 +421,16 @@ impl Vm {
                     Some(vars),
                 )?;
             }
+            // Value::Type(t) => {
+            //     if arg_amount != param_types.len() {
+            //         return Err(RuntimeError::IncorrectArgAmount {
+            //             expected: param_types.len(),
+            //             found: arg_amount,
+            //             val_area: base.def_area.clone(),
+            //             area: call_area,
+            //         });
+            //     }
+            // }
             _ => {
                 return Err(RuntimeError::CannotCall {
                     v: (base.value.get_type(), base.def_area.clone()),

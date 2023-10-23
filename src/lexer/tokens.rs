@@ -68,6 +68,10 @@ tokens! {
     While: "while",
     For: "for",
 
+    Return: "return",
+    Break: "break",
+    Continue: "continue",
+
     Let: "let",
 
     Dbg: "dbg",

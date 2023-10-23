@@ -8,6 +8,8 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum CompilerError {
     NonexistentVariable(String, CodeArea),
+    BreakOutsideLoop(CodeArea),
+    ContinueOutsideLoop(CodeArea),
     // InvalidBinaryOperands {
     //     a: (ValueType, CodeArea),
     //     b: (ValueType, CodeArea),
@@ -37,6 +39,14 @@ impl CompilerError {
             CompilerError::NonexistentVariable(name, area) => (
                 "Nonexistent variable",
                 vec![(area, special_fmt!("Variable {} does not exist", name))],
+            ),
+            CompilerError::BreakOutsideLoop(area) => (
+                "Break used outside of loop",
+                vec![(area, "This break was used outside of a loop".into())],
+            ),
+            CompilerError::ContinueOutsideLoop(area) => (
+                "Continue used outside of loop",
+                vec![(area, "This continue was used outside of a loop".into())],
             ),
         };
 

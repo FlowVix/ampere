@@ -1,13 +1,9 @@
 
 
-let f = (n) => {
-    if n < 2 {
-        1
-    } else {
-        n * f(n - 1)
-    }
+let a = 0;
+while a < 10 {
+    2 + (3 + (4 + { break 5; }));
 };
 
-dbg f(6);
-
+dbg 0;
 

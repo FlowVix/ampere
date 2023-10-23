@@ -357,6 +357,30 @@ impl<'a> Parser<'a> {
                     let body = Box::new(self.parse_expr()?);
                     ExprType::While { cond, body }
                 }
+                Token::Return => {
+                    let v = if !matches!(self.peek()?, Token::Semicolon | Token::ClosedBracket) {
+                        Some(Box::new(self.parse_expr()?))
+                    } else {
+                        None
+                    };
+                    ExprType::Return(v)
+                }
+                Token::Break => {
+                    let v = if !matches!(self.peek()?, Token::Semicolon | Token::ClosedBracket) {
+                        Some(Box::new(self.parse_expr()?))
+                    } else {
+                        None
+                    };
+                    ExprType::Break(v)
+                }
+                Token::Continue => {
+                    let v = if !matches!(self.peek()?, Token::Semicolon | Token::ClosedBracket) {
+                        Some(Box::new(self.parse_expr()?))
+                    } else {
+                        None
+                    };
+                    ExprType::Continue(v)
+                }
 
                 unary_op
                     if {

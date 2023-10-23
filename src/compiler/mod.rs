@@ -21,8 +21,8 @@ use self::{
     bytecode::Constant,
     error::CompilerError,
     opcodes::{Opcode, VarID},
-    proto::{JumpType, ProtoBytecode},
-    scope::{Scope, ScopeID, VarData},
+    proto::{BlockID, JumpType, ProtoBytecode},
+    scope::{Scope, ScopeID, ScopeType, VarData},
 };
 
 pub mod builder;
@@ -92,12 +92,23 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn derive_scope(&mut self, scope: ScopeID) -> ScopeID {
+    pub fn derive_scope(&mut self, scope: ScopeID, typ: ScopeType) -> ScopeID {
         let new = Scope {
             vars: AHashMap::new(),
             parent: Some(scope),
+            typ,
         };
         self.scopes.insert(new)
+    }
+
+    pub fn get_loop(&self, scope: ScopeID) -> Option<BlockID> {
+        match self.scopes[scope].typ {
+            ScopeType::Loop(v) => Some(v),
+            _ => match self.scopes[scope].parent {
+                Some(s) => self.get_loop(s),
+                None => None,
+            },
+        }
     }
 
     pub fn do_let(
@@ -231,7 +242,7 @@ impl<'a> Compiler<'a> {
                 builder.push_raw_opcode(Opcode::WrapTuple(v.len() as u16), expr.span);
             }
             ExprType::Block(v) => {
-                let derived = self.derive_scope(scope);
+                let derived = self.derive_scope(scope, ScopeType::Normal);
                 self.compile_stmts(v, builder, derived, expr.span)?;
             }
             ExprType::If {
@@ -243,7 +254,7 @@ impl<'a> Compiler<'a> {
                     let outer = builder.block;
 
                     builder.new_block(|builder| {
-                        let derived = self.derive_scope(scope);
+                        let derived = self.derive_scope(scope, ScopeType::Normal);
 
                         self.compile_expr(cond, builder, derived)?;
                         builder.push_jump(None, JumpType::EndIfFalse, expr.span);
@@ -253,7 +264,7 @@ impl<'a> Compiler<'a> {
                         Ok(())
                     })?;
                     if let Some(s) = otherwise {
-                        let derived = self.derive_scope(scope);
+                        let derived = self.derive_scope(scope, ScopeType::Normal);
 
                         self.compile_expr(s, builder, derived)?;
                     } else {
@@ -267,7 +278,7 @@ impl<'a> Compiler<'a> {
                 builder.push_raw_opcode(Opcode::PushUnit, expr.span);
 
                 builder.new_block(|builder| {
-                    let derived = self.derive_scope(scope);
+                    let derived = self.derive_scope(scope, ScopeType::Loop(builder.block));
 
                     self.compile_expr(cond, builder, derived)?;
                     builder.push_jump(None, JumpType::EndIfFalse, expr.span);
@@ -293,6 +304,7 @@ impl<'a> Compiler<'a> {
                         let func_scope = self.scopes.insert(Scope {
                             vars: AHashMap::new(),
                             parent: None,
+                            typ: ScopeType::FuncBody,
                         });
                         let mut captured_map = vec![];
 
@@ -327,6 +339,33 @@ impl<'a> Compiler<'a> {
             ExprType::Dbg(v) => {
                 self.compile_expr(v, builder, scope)?;
                 builder.push_raw_opcode(Opcode::Dbg, expr.span);
+            }
+            ExprType::Return(_) => todo!(),
+            ExprType::Break(v) => {
+                if let Some(v) = v {
+                    self.compile_expr(v, builder, scope)?
+                } else {
+                    builder.push_raw_opcode(Opcode::PushUnit, expr.span);
+                }
+                if let Some(b) = self.get_loop(scope) {
+                    builder.push_jump(Some(b), JumpType::End, expr.span);
+                } else {
+                    return Err(CompilerError::BreakOutsideLoop(self.make_area(expr.span)));
+                }
+            }
+            ExprType::Continue(v) => {
+                if let Some(v) = v {
+                    self.compile_expr(v, builder, scope)?
+                } else {
+                    builder.push_raw_opcode(Opcode::PushUnit, expr.span);
+                }
+                if let Some(b) = self.get_loop(scope) {
+                    builder.push_jump(Some(b), JumpType::Start, expr.span);
+                } else {
+                    return Err(CompilerError::ContinueOutsideLoop(
+                        self.make_area(expr.span),
+                    ));
+                }
             }
         }
 
@@ -414,6 +453,7 @@ impl<'a> Compiler<'a> {
                 let global_scope = compiler.scopes.insert(Scope {
                     vars: AHashMap::new(),
                     parent: None,
+                    typ: ScopeType::File,
                 });
                 compiler.compile_stmts(stmts, builder, global_scope, span)?;
                 Ok(vec![])
