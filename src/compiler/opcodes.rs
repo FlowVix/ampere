@@ -49,53 +49,109 @@ macro_rules! make_ids {
 
 make_ids! {
     ConstID: u16;
-    VarID: u16;
     OpcodePos: u16;
+    Register: u16;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opcode {
-    LoadConst(ConstID),
+    LoadConst(ConstID, Register),
 
-    SetVar(VarID),
-    LoadVar(VarID),
+    LoadUnit(Register),
 
-    PopTop,
-    PushUnit,
+    CopyDeep(Register, Register),
+    CopyShallow(Register, Register),
 
-    Plus,
-    Minus,
-    Mult,
-    Div,
-    Modulo,
-    Pow,
+    Plus {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Minus {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Mult {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Div {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Modulo {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Pow {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
 
-    Gt,
-    Gte,
-    Lt,
-    Lte,
-    Eq,
-    NotEq,
+    Gt {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Gte {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Lt {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Lte {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    Eq {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
+    NotEq {
+        a: Register,
+        b: Register,
+        to: Register,
+    },
 
-    UnaryMinus,
-    UnaryNot,
+    UnaryMinus {
+        v: Register,
+        to: Register,
+    },
+    UnaryNot {
+        v: Register,
+        to: Register,
+    },
 
     Jump(OpcodePos),
-    JumpIfFalse(OpcodePos),
-    JumpIfTrue(OpcodePos),
+    JumpIfFalse(Register, OpcodePos),
+    JumpIfTrue(Register, OpcodePos),
 
-    WrapArray(u16),
-    WrapTuple(u16),
+    CreateArray(Register, u16),
+    CreateTuple(Register, u16),
+    PushElem {
+        from: Register,
+        arr: Register,
+    },
 
-    Dbg,
+    Dbg(Register),
+    // UnwrapArray(u16),
+    // UnwrapTuple(u16),
 
-    UnwrapArray(u16),
-    UnwrapTuple(u16),
+    // PushFunc(FuncID),
+    // SetArgAmount(u16),
+    // SetArgType(u16),
+    // SetReturnType,
 
-    PushFunc(FuncID),
-    SetArgAmount(u16),
-    SetArgType(u16),
-    SetReturnType,
-
-    Call(u16),
+    // Call(u16),
 }

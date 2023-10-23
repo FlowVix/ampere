@@ -12,7 +12,7 @@ use crate::{
 use super::{
     builder::CodeBuilder,
     bytecode::{Bytecode, Constant},
-    opcodes::{Opcode, VarID},
+    opcodes::{Opcode, Register},
     CompileResult,
 };
 
@@ -25,23 +25,25 @@ make_ids! {
 pub enum JumpType {
     Start,
     End,
-    StartIfFalse,
-    EndIfFalse,
-    StartIfTrue,
-    EndIfTrue,
+    StartIfFalse(Register),
+    EndIfFalse(Register),
+    StartIfTrue(Register),
+    EndIfTrue(Register),
 }
 impl JumpType {
     pub fn start(self) -> bool {
         match self {
-            JumpType::Start | JumpType::StartIfFalse | JumpType::StartIfTrue => true,
+            JumpType::Start | JumpType::StartIfFalse(_) | JumpType::StartIfTrue(_) => true,
             _ => false,
         }
     }
-    pub fn opcode_f(self) -> fn(OpcodePos) -> Opcode {
+    pub fn opcode(self, pos: OpcodePos) -> Opcode {
         match self {
-            JumpType::Start | JumpType::End => Opcode::Jump,
-            JumpType::StartIfFalse | JumpType::EndIfFalse => Opcode::JumpIfFalse,
-            JumpType::StartIfTrue | JumpType::EndIfTrue => Opcode::JumpIfTrue,
+            JumpType::Start | JumpType::End => Opcode::Jump(pos),
+            JumpType::StartIfFalse(reg) | JumpType::EndIfFalse(reg) => {
+                Opcode::JumpIfFalse(reg, pos)
+            }
+            JumpType::StartIfTrue(reg) | JumpType::EndIfTrue(reg) => Opcode::JumpIfTrue(reg, pos),
         }
     }
 }
@@ -61,8 +63,8 @@ pub enum BlockContent {
 #[derive(Debug)]
 pub struct ProtoFunc {
     pub code: BlockID,
-    pub var_count: u16,
-    pub captured: Vec<(VarID, VarID)>,
+    pub reg_count: u16,
+    pub captured: Vec<(Register, Register)>,
 }
 
 pub type Block = Vec<BlockContent>;
@@ -77,12 +79,12 @@ pub struct ProtoBytecode {
 impl ProtoBytecode {
     pub fn new_func<F>(&mut self, f: F, span: CodeSpan) -> CompileResult<FuncID>
     where
-        F: FnOnce(&mut CodeBuilder) -> CompileResult<Vec<(VarID, VarID)>>,
+        F: FnOnce(&mut CodeBuilder) -> CompileResult<Vec<(Register, Register)>>,
     {
         let f_block = self.blocks.insert(Default::default());
         self.functions.push(ProtoFunc {
             code: f_block,
-            var_count: 0,
+            reg_count: 0,
             captured: vec![],
         });
         let func = self.functions.len() - 1;
@@ -151,8 +153,7 @@ impl ProtoBytecode {
                                 ProtoOpcode::Raw(o) => *o,
                                 ProtoOpcode::Jump(to, typ) => {
                                     let to = get_jump_pos(*to, typ.start());
-                                    let f = typ.opcode_f();
-                                    f(to)
+                                    typ.opcode(to)
                                 }
                             };
                             opcodes.push(opcode);
@@ -176,7 +177,7 @@ impl ProtoBytecode {
 
             funcs.push(Function {
                 opcodes: opcodes.into(),
-                var_count: func.var_count,
+                reg_count: func.reg_count,
                 opcode_spans: opcode_spans.into(),
                 captured: func.captured.clone().into(),
             })

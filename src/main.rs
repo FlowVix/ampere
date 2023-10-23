@@ -70,17 +70,13 @@ fn main() {
 
     let mut vm = Vm {
         memory: SlabMap::new(),
-        stack: vec![],
     };
     println!("{}", "------------------------------".dimmed());
-    match vm.run_func(
-        RunInfo {
-            program: &program,
-            bytecode_idx: 0,
-            func_idx: 0,
-        },
-        None,
-    ) {
+    match vm.run_func(RunInfo {
+        program: &program,
+        bytecode_idx: 0,
+        func_idx: 0,
+    }) {
         Ok(_) => {
             // println!(
             //     "{} {}",

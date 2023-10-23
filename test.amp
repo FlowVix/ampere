@@ -1,9 +1,11 @@
 
 
 let a = 0;
-while a < 10 {
-    2 + (3 + (4 + { break 5; }));
-};
-
-dbg 0;
-
+let b = 1;
+dbg while a < 10000 {
+    dbg a;
+    let c = a + b;
+    a = b;
+    b = c;
+    5
+}

@@ -20,7 +20,7 @@ use self::{
     builder::CodeBuilder,
     bytecode::Constant,
     error::CompilerError,
-    opcodes::{Opcode, VarID},
+    opcodes::{Opcode, Register},
     proto::{BlockID, JumpType, ProtoBytecode},
     scope::{Scope, ScopeID, ScopeType, VarData},
 };
@@ -78,12 +78,11 @@ impl<'a> Compiler<'a> {
         def_span: CodeSpan,
         scope: ScopeID,
         builder: &mut CodeBuilder,
-    ) -> VarID {
-        let id = builder.next_var_id();
-        self.scopes[scope]
-            .vars
-            .insert(var, VarData { def_span, id });
-        id
+    ) -> &VarData {
+        let reg = builder.next_reg();
+        let data = VarData { def_span, reg };
+        self.scopes[scope].vars.insert(var, data);
+        &self.scopes[scope].vars[&var]
     }
     pub fn make_area(&self, span: CodeSpan) -> CodeArea {
         CodeArea {
@@ -101,9 +100,9 @@ impl<'a> Compiler<'a> {
         self.scopes.insert(new)
     }
 
-    pub fn get_loop(&self, scope: ScopeID) -> Option<BlockID> {
+    pub fn get_loop(&self, scope: ScopeID) -> Option<(BlockID, Register)> {
         match self.scopes[scope].typ {
-            ScopeType::Loop(v) => Some(v),
+            ScopeType::Loop(v, r) => Some((v, r)),
             _ => match self.scopes[scope].parent {
                 Some(s) => self.get_loop(s),
                 None => None,
@@ -114,25 +113,28 @@ impl<'a> Compiler<'a> {
     pub fn do_let(
         &mut self,
         pat: &LetPatternNode,
+        reg: Register,
         builder: &mut CodeBuilder,
         scope: ScopeID,
     ) -> CompileResult<()> {
         match &pat.typ {
             LetPatternType::Var(v) => {
-                let id = self.new_var(*v, pat.span, scope, builder);
-                builder.push_raw_opcode(Opcode::SetVar(id), pat.span);
+                let var = self.new_var(*v, pat.span, scope, builder);
+                builder.push_raw_opcode(Opcode::CopyDeep(reg, var.reg), pat.span);
             }
             LetPatternType::ArrayDestructure(pats) => {
-                builder.push_raw_opcode(Opcode::UnwrapArray(pats.len() as u16), pat.span);
-                for pat in pats.iter().rev() {
-                    self.do_let(pat, builder, scope)?;
-                }
+                todo!()
+                // builder.push_raw_opcode(Opcode::UnwrapArray(pats.len() as u16), pat.span);
+                // for pat in pats.iter().rev() {
+                //     self.do_let(pat, builder, scope)?;
+                // }
             }
             LetPatternType::TupleDestructure(pats) => {
-                builder.push_raw_opcode(Opcode::UnwrapTuple(pats.len() as u16), pat.span);
-                for pat in pats.iter().rev() {
-                    self.do_let(pat, builder, scope)?;
-                }
+                todo!()
+                // builder.push_raw_opcode(Opcode::UnwrapTuple(pats.len() as u16), pat.span);
+                // for pat in pats.iter().rev() {
+                //     self.do_let(pat, builder, scope)?;
+                // }
             }
         }
         Ok(())
@@ -141,13 +143,15 @@ impl<'a> Compiler<'a> {
     pub fn do_assign(
         &mut self,
         pat: &AssignPatternNode,
+        reg: Register,
         builder: &mut CodeBuilder,
         scope: ScopeID,
     ) -> CompileResult<()> {
         match &pat.typ {
             AssignPatternType::Path { var, path } => match self.get_var(var, scope) {
-                Some(v) => {
-                    builder.push_raw_opcode(Opcode::SetVar(v.id), pat.span);
+                Some(var) => {
+                    // builder.push_raw_opcode(Opcode::SetVar(v.id), pat.span);
+                    builder.push_raw_opcode(Opcode::CopyDeep(reg, var.reg), pat.span);
                 }
                 None => {
                     return Err(CompilerError::NonexistentVariable(
@@ -157,16 +161,18 @@ impl<'a> Compiler<'a> {
                 }
             },
             AssignPatternType::ArrayDestructure(pats) => {
-                builder.push_raw_opcode(Opcode::UnwrapArray(pats.len() as u16), pat.span);
-                for pat in pats.iter().rev() {
-                    self.do_assign(pat, builder, scope)?;
-                }
+                todo!()
+                // builder.push_raw_opcode(Opcode::UnwrapArray(pats.len() as u16), pat.span);
+                // for pat in pats.iter().rev() {
+                //     self.do_assign(pat, builder, scope)?;
+                // }
             }
             AssignPatternType::TupleDestructure(pats) => {
-                builder.push_raw_opcode(Opcode::UnwrapTuple(pats.len() as u16), pat.span);
-                for pat in pats.iter().rev() {
-                    self.do_assign(pat, builder, scope)?;
-                }
+                todo!()
+                // builder.push_raw_opcode(Opcode::UnwrapTuple(pats.len() as u16), pat.span);
+                // for pat in pats.iter().rev() {
+                //     self.do_assign(pat, builder, scope)?;
+                // }
             }
         }
         Ok(())
@@ -177,16 +183,30 @@ impl<'a> Compiler<'a> {
         expr: &ExprNode,
         builder: &mut CodeBuilder,
         scope: ScopeID,
-    ) -> CompileResult<()> {
-        match &expr.typ {
-            ExprType::Int(v) => builder.load_const(Constant::Int(*v), expr.span),
-            ExprType::Float(v) => builder.load_const(Constant::Float(*v), expr.span),
-            ExprType::String(v) => {
-                builder.load_const(Constant::String(self.resolve(v).into()), expr.span)
+    ) -> CompileResult<Register> {
+        Ok(match &expr.typ {
+            ExprType::Int(v) => {
+                let out = builder.next_reg();
+                builder.load_const(Constant::Int(*v), out, expr.span);
+                out
             }
-            ExprType::Bool(v) => builder.load_const(Constant::Bool(*v), expr.span),
+            ExprType::Float(v) => {
+                let out = builder.next_reg();
+                builder.load_const(Constant::Float(*v), out, expr.span);
+                out
+            }
+            ExprType::String(v) => {
+                let out = builder.next_reg();
+                builder.load_const(Constant::String(self.resolve(v).into()), out, expr.span);
+                out
+            }
+            ExprType::Bool(v) => {
+                let out = builder.next_reg();
+                builder.load_const(Constant::Bool(*v), out, expr.span);
+                out
+            }
             ExprType::Var(name) => match self.get_var(name, scope) {
-                Some(v) => builder.push_raw_opcode(Opcode::LoadVar(v.id), expr.span),
+                Some(v) => v.reg,
                 None => {
                     return Err(CompilerError::NonexistentVariable(
                         self.resolve(name).into(),
@@ -195,222 +215,245 @@ impl<'a> Compiler<'a> {
                 }
             },
             ExprType::Unary(op, v) => {
-                self.compile_expr(v, builder, scope)?;
+                let to = builder.next_reg();
+                let v = self.compile_expr(v, builder, scope)?;
                 match op {
-                    UnaryOp::Not => builder.push_raw_opcode(Opcode::UnaryNot, expr.span),
-                    UnaryOp::Minus => builder.push_raw_opcode(Opcode::UnaryMinus, expr.span),
+                    UnaryOp::Not => builder.push_raw_opcode(Opcode::UnaryNot { v, to }, expr.span),
+                    UnaryOp::Minus => {
+                        builder.push_raw_opcode(Opcode::UnaryMinus { v, to }, expr.span)
+                    }
                 }
+                to
             }
             ExprType::Op(a, op, b) => {
-                self.compile_expr(a, builder, scope)?;
-                self.compile_expr(b, builder, scope)?;
+                let to = builder.next_reg();
+                let a = self.compile_expr(a, builder, scope)?;
+                let b = self.compile_expr(b, builder, scope)?;
                 match op {
-                    BinOp::Plus => builder.push_raw_opcode(Opcode::Plus, expr.span),
-                    BinOp::Minus => builder.push_raw_opcode(Opcode::Minus, expr.span),
-                    BinOp::Mult => builder.push_raw_opcode(Opcode::Mult, expr.span),
-                    BinOp::Div => builder.push_raw_opcode(Opcode::Div, expr.span),
-                    BinOp::Mod => builder.push_raw_opcode(Opcode::Modulo, expr.span),
-                    BinOp::Pow => builder.push_raw_opcode(Opcode::Pow, expr.span),
-                    BinOp::Eq => builder.push_raw_opcode(Opcode::Eq, expr.span),
-                    BinOp::NotEq => builder.push_raw_opcode(Opcode::NotEq, expr.span),
-                    BinOp::Gt => builder.push_raw_opcode(Opcode::Gt, expr.span),
-                    BinOp::Gte => builder.push_raw_opcode(Opcode::Gte, expr.span),
-                    BinOp::Lt => builder.push_raw_opcode(Opcode::Lt, expr.span),
-                    BinOp::Lte => builder.push_raw_opcode(Opcode::Lte, expr.span),
+                    BinOp::Plus => builder.push_raw_opcode(Opcode::Plus { a, b, to }, expr.span),
+                    BinOp::Minus => builder.push_raw_opcode(Opcode::Minus { a, b, to }, expr.span),
+                    BinOp::Mult => builder.push_raw_opcode(Opcode::Mult { a, b, to }, expr.span),
+                    BinOp::Div => builder.push_raw_opcode(Opcode::Div { a, b, to }, expr.span),
+                    BinOp::Mod => builder.push_raw_opcode(Opcode::Modulo { a, b, to }, expr.span),
+                    BinOp::Pow => builder.push_raw_opcode(Opcode::Pow { a, b, to }, expr.span),
+                    BinOp::Eq => builder.push_raw_opcode(Opcode::Eq { a, b, to }, expr.span),
+                    BinOp::NotEq => builder.push_raw_opcode(Opcode::NotEq { a, b, to }, expr.span),
+                    BinOp::Gt => builder.push_raw_opcode(Opcode::Gt { a, b, to }, expr.span),
+                    BinOp::Gte => builder.push_raw_opcode(Opcode::Gte { a, b, to }, expr.span),
+                    BinOp::Lt => builder.push_raw_opcode(Opcode::Lt { a, b, to }, expr.span),
+                    BinOp::Lte => builder.push_raw_opcode(Opcode::Lte { a, b, to }, expr.span),
                 }
+                to
             }
             ExprType::Index { base, index } => todo!(),
             ExprType::Member { base, member } => todo!(),
             ExprType::Associated { base, member } => todo!(),
             ExprType::Call { base, args } => {
-                self.compile_expr(base, builder, scope)?;
-                for i in args {
-                    self.compile_expr(i, builder, scope)?;
-                }
-                builder.push_raw_opcode(Opcode::Call(args.len() as u16), expr.span);
+                todo!()
+                // self.compile_expr(base, builder, scope)?;
+                // for i in args {
+                //     self.compile_expr(i, builder, scope)?;
+                // }
+                // builder.push_raw_opcode(Opcode::Call(args.len() as u16), expr.span);
             }
             ExprType::Array(v) => {
+                let out = builder.next_reg();
+                builder.push_raw_opcode(Opcode::CreateArray(out, v.len() as u16), expr.span);
                 for i in v {
-                    self.compile_expr(i, builder, scope)?;
+                    let r = self.compile_expr(i, builder, scope)?;
+                    builder.push_raw_opcode(Opcode::PushElem { from: r, arr: out }, expr.span);
                 }
-                builder.push_raw_opcode(Opcode::WrapArray(v.len() as u16), expr.span);
+                out
             }
             ExprType::Tuple(v) => {
+                let out = builder.next_reg();
+                builder.push_raw_opcode(Opcode::CreateTuple(out, v.len() as u16), expr.span);
                 for i in v {
-                    self.compile_expr(i, builder, scope)?;
+                    let r = self.compile_expr(i, builder, scope)?;
+                    builder.push_raw_opcode(Opcode::PushElem { from: r, arr: out }, expr.span);
                 }
-                builder.push_raw_opcode(Opcode::WrapTuple(v.len() as u16), expr.span);
+                out
             }
             ExprType::Block(v) => {
                 let derived = self.derive_scope(scope, ScopeType::Normal);
-                self.compile_stmts(v, builder, derived, expr.span)?;
+                self.compile_stmts(v, builder, derived, expr.span)?
             }
             ExprType::If {
                 cond,
                 then,
                 otherwise,
             } => {
+                let out = builder.next_reg();
+
                 builder.new_block(|builder| {
                     let outer = builder.block;
 
                     builder.new_block(|builder| {
                         let derived = self.derive_scope(scope, ScopeType::Normal);
 
-                        self.compile_expr(cond, builder, derived)?;
-                        builder.push_jump(None, JumpType::EndIfFalse, expr.span);
+                        let cond = self.compile_expr(cond, builder, derived)?;
+                        builder.push_jump(None, JumpType::EndIfFalse(cond), expr.span);
 
-                        self.compile_expr(then, builder, derived)?;
+                        let r = self.compile_expr(then, builder, derived)?;
+                        builder.push_raw_opcode(Opcode::CopyShallow(r, out), expr.span);
                         builder.push_jump(Some(outer), JumpType::End, expr.span);
                         Ok(())
                     })?;
                     if let Some(s) = otherwise {
                         let derived = self.derive_scope(scope, ScopeType::Normal);
 
-                        self.compile_expr(s, builder, derived)?;
+                        let r = self.compile_expr(s, builder, derived)?;
+                        builder.push_raw_opcode(Opcode::CopyShallow(r, out), expr.span);
                     } else {
-                        builder.push_raw_opcode(Opcode::PushUnit, expr.span);
+                        builder.push_raw_opcode(Opcode::LoadUnit(out), expr.span);
                     }
 
                     Ok(())
                 })?;
+
+                out
             }
             ExprType::While { cond, body } => {
-                builder.push_raw_opcode(Opcode::PushUnit, expr.span);
+                let out = builder.next_reg();
+                builder.push_raw_opcode(Opcode::LoadUnit(out), expr.span);
 
                 builder.new_block(|builder| {
-                    let derived = self.derive_scope(scope, ScopeType::Loop(builder.block));
+                    let derived = self.derive_scope(scope, ScopeType::Loop(builder.block, out));
 
-                    self.compile_expr(cond, builder, derived)?;
-                    builder.push_jump(None, JumpType::EndIfFalse, expr.span);
-                    builder.push_raw_opcode(Opcode::PopTop, expr.span);
+                    let cond = self.compile_expr(cond, builder, derived)?;
+                    builder.push_jump(None, JumpType::EndIfFalse(cond), expr.span);
 
-                    self.compile_expr(body, builder, derived)?;
+                    let r = self.compile_expr(body, builder, derived)?;
+                    builder.push_raw_opcode(Opcode::CopyShallow(r, out), expr.span);
                     builder.push_jump(None, JumpType::Start, expr.span);
                     Ok(())
                 })?;
+
+                out
             }
             ExprType::Function {
                 params,
                 ret_type,
                 body,
             } => {
-                let mut captured_names = AHashMap::new();
-                self.for_accessible_vars(scope, &mut |name, data| {
-                    captured_names.insert(name, data);
-                });
+                todo!()
+                // let mut captured_names = AHashMap::new();
+                // self.for_accessible_vars(scope, &mut |name, data| {
+                //     captured_names.insert(name, data);
+                // });
 
-                let id = builder.new_func(
-                    |builder| {
-                        let func_scope = self.scopes.insert(Scope {
-                            vars: AHashMap::new(),
-                            parent: None,
-                            typ: ScopeType::FuncBody,
-                        });
-                        let mut captured_map = vec![];
+                // let id = builder.new_func(
+                //     |builder| {
+                //         let func_scope = self.scopes.insert(Scope {
+                //             vars: AHashMap::new(),
+                //             parent: None,
+                //             typ: ScopeType::FuncBody,
+                //         });
+                //         let mut captured_map = vec![];
 
-                        for (name, data) in captured_names {
-                            let new_id = self.new_var(name, data.def_span, func_scope, builder);
-                            captured_map.push((data.id, new_id));
-                        }
+                //         for (name, data) in captured_names {
+                //             let new_id = self.new_var(name, data.def_span, func_scope, builder);
+                //             captured_map.push((data.id, new_id));
+                //         }
 
-                        for (pat, _) in params.iter().rev() {
-                            self.do_let(pat, builder, func_scope)?;
-                        }
+                //         for (pat, _) in params.iter().rev() {
+                //             self.do_let(pat, builder, func_scope)?;
+                //         }
 
-                        self.compile_expr(body, builder, func_scope)?;
+                //         self.compile_expr(body, builder, func_scope)?;
 
-                        Ok(captured_map)
-                    },
-                    expr.span,
-                )?;
-                builder.push_raw_opcode(Opcode::PushFunc(id), expr.span);
-                builder.push_raw_opcode(Opcode::SetArgAmount(params.len() as u16), expr.span);
-                for (idx, (_, t)) in params.iter().enumerate() {
-                    if let Some(t) = t {
-                        self.compile_expr(t, builder, scope)?;
-                        builder.push_raw_opcode(Opcode::SetArgType(idx as u16), t.span);
-                    }
-                }
-                if let Some(t) = ret_type {
-                    self.compile_expr(t, builder, scope)?;
-                    builder.push_raw_opcode(Opcode::SetReturnType, t.span);
-                }
+                //         Ok(captured_map)
+                //     },
+                //     expr.span,
+                // )?;
+                // builder.push_raw_opcode(Opcode::PushFunc(id), expr.span);
+                // builder.push_raw_opcode(Opcode::SetArgAmount(params.len() as u16), expr.span);
+                // for (idx, (_, t)) in params.iter().enumerate() {
+                //     if let Some(t) = t {
+                //         self.compile_expr(t, builder, scope)?;
+                //         builder.push_raw_opcode(Opcode::SetArgType(idx as u16), t.span);
+                //     }
+                // }
+                // if let Some(t) = ret_type {
+                //     self.compile_expr(t, builder, scope)?;
+                //     builder.push_raw_opcode(Opcode::SetReturnType, t.span);
+                // }
             }
             ExprType::Dbg(v) => {
-                self.compile_expr(v, builder, scope)?;
-                builder.push_raw_opcode(Opcode::Dbg, expr.span);
+                let out = self.compile_expr(v, builder, scope)?;
+                builder.push_raw_opcode(Opcode::Dbg(out), expr.span);
+                out
             }
             ExprType::Return(_) => todo!(),
             ExprType::Break(v) => {
-                if let Some(v) = v {
-                    self.compile_expr(v, builder, scope)?
-                } else {
-                    builder.push_raw_opcode(Opcode::PushUnit, expr.span);
-                }
-                if let Some(b) = self.get_loop(scope) {
-                    builder.push_jump(Some(b), JumpType::End, expr.span);
+                if let Some((block, reg)) = self.get_loop(scope) {
+                    if let Some(v) = v {
+                        let r = self.compile_expr(v, builder, scope)?;
+                        builder.push_raw_opcode(Opcode::CopyShallow(r, reg), expr.span);
+                    } else {
+                        builder.push_raw_opcode(Opcode::LoadUnit(reg), expr.span);
+                    }
+
+                    builder.push_jump(Some(block), JumpType::End, expr.span);
                 } else {
                     return Err(CompilerError::BreakOutsideLoop(self.make_area(expr.span)));
                 }
+
+                builder.next_reg()
             }
             ExprType::Continue(v) => {
-                if let Some(v) = v {
-                    self.compile_expr(v, builder, scope)?
-                } else {
-                    builder.push_raw_opcode(Opcode::PushUnit, expr.span);
-                }
-                if let Some(b) = self.get_loop(scope) {
-                    builder.push_jump(Some(b), JumpType::Start, expr.span);
-                } else {
-                    return Err(CompilerError::ContinueOutsideLoop(
-                        self.make_area(expr.span),
-                    ));
-                }
-            }
-        }
+                if let Some((block, reg)) = self.get_loop(scope) {
+                    if let Some(v) = v {
+                        let r = self.compile_expr(v, builder, scope)?;
+                        builder.push_raw_opcode(Opcode::CopyShallow(r, reg), expr.span);
+                    } else {
+                        builder.push_raw_opcode(Opcode::LoadUnit(reg), expr.span);
+                    }
 
-        Ok(())
+                    builder.push_jump(Some(block), JumpType::Start, expr.span);
+                } else {
+                    return Err(CompilerError::BreakOutsideLoop(self.make_area(expr.span)));
+                }
+
+                builder.next_reg()
+            }
+        })
     }
     pub fn compile_stmt(
         &mut self,
         stmt: &StmtNode,
         builder: &mut CodeBuilder,
         scope: ScopeID,
-        ret: bool,
-    ) -> CompileResult<()> {
+    ) -> CompileResult<Option<Register>> {
         match &stmt.typ {
             StmtType::Expr(v) => {
-                self.compile_expr(v, builder, scope)?;
-                if !ret {
-                    builder.push_raw_opcode(Opcode::PopTop, stmt.span);
-                }
-                return Ok(());
+                let r = self.compile_expr(v, builder, scope)?;
+                return Ok(Some(r));
             }
             StmtType::Let(pat, v) => {
                 let b1 = builder.new_block(|_| Ok(()))?;
                 let b2 = builder.new_block(|_| Ok(()))?;
 
+                let middle = builder.next_reg();
+
                 builder.in_block(b2, |builder| {
-                    self.do_let(pat, builder, scope)?;
+                    self.do_let(pat, middle, builder, scope)?;
                     Ok(())
                 })?;
                 builder.in_block(b1, |builder| {
-                    self.compile_expr(v, builder, scope)?;
+                    let r = self.compile_expr(v, builder, scope)?;
+                    builder.push_raw_opcode(Opcode::CopyShallow(r, middle), v.span);
                     Ok(())
                 })?;
             }
             StmtType::Assign(pat, v) => {
-                self.compile_expr(v, builder, scope)?;
-                self.do_assign(pat, builder, scope)?;
+                let r = self.compile_expr(v, builder, scope)?;
+                self.do_assign(pat, r, builder, scope)?;
             }
             StmtType::AssignOp(_, _, _) => todo!(),
         }
 
-        if ret {
-            builder.push_raw_opcode(Opcode::PushUnit, stmt.span);
-        }
-
-        Ok(())
+        Ok(None)
     }
     pub fn compile_stmts(
         &mut self,
@@ -418,22 +461,28 @@ impl<'a> Compiler<'a> {
         builder: &mut CodeBuilder,
         scope: ScopeID,
         span: CodeSpan,
-    ) -> CompileResult<()> {
+    ) -> CompileResult<Register> {
         let (v, r) = match stmts {
             Stmts::Normal(v) => (v, None),
             Stmts::Ret(v, r) => (v, Some(r)),
         };
 
         for i in v {
-            self.compile_stmt(i, builder, scope, false)?;
+            self.compile_stmt(i, builder, scope)?;
         }
-        if let Some(r) = r {
-            self.compile_stmt(r, builder, scope, true)?;
+        let ret = if let Some(r) = r {
+            self.compile_stmt(r, builder, scope)?
         } else {
-            builder.push_raw_opcode(Opcode::PushUnit, span);
-        }
+            None
+        };
 
-        Ok(())
+        Ok(if let Some(r) = ret {
+            r
+        } else {
+            let out = builder.next_reg();
+            builder.push_raw_opcode(Opcode::LoadUnit(out), span);
+            out
+        })
     }
     pub fn new_compile_file(
         stmts: &Stmts,

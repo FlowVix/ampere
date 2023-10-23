@@ -2,7 +2,7 @@ use crate::source::CodeSpan;
 
 use super::{
     bytecode::Constant,
-    opcodes::{Opcode, VarID},
+    opcodes::{Opcode, Register},
     proto::{
         Block, BlockContent, BlockID, FuncID, JumpType, ProtoBytecode, ProtoFunc, ProtoOpcode,
     },
@@ -22,15 +22,15 @@ impl<'a> CodeBuilder<'a> {
     fn current_block(&mut self) -> &mut Block {
         &mut self.proto_bytecode.blocks[self.block]
     }
-    pub fn next_var_id(&mut self) -> VarID {
-        let v = self.current_func().var_count.into();
-        self.current_func().var_count += 1;
+    pub fn next_reg(&mut self) -> Register {
+        let v = self.current_func().reg_count.into();
+        self.current_func().reg_count += 1;
         v
     }
 
     pub fn new_func<F>(&mut self, f: F, span: CodeSpan) -> CompileResult<FuncID>
     where
-        F: FnOnce(&mut CodeBuilder) -> CompileResult<Vec<(VarID, VarID)>>,
+        F: FnOnce(&mut CodeBuilder) -> CompileResult<Vec<(Register, Register)>>,
     {
         self.proto_bytecode.new_func(f, span)
     }
@@ -62,9 +62,9 @@ impl<'a> CodeBuilder<'a> {
         Ok(f_block)
     }
 
-    pub fn load_const(&mut self, c: Constant, span: CodeSpan) {
+    pub fn load_const(&mut self, c: Constant, to: Register, span: CodeSpan) {
         let id = self.proto_bytecode.consts.insert(c).into();
-        self.push_opcode(ProtoOpcode::Raw(Opcode::LoadConst(id)), span)
+        self.push_opcode(ProtoOpcode::Raw(Opcode::LoadConst(id, to)), span)
     }
 
     fn push_opcode(&mut self, opcode: ProtoOpcode, span: CodeSpan) {

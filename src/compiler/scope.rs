@@ -3,7 +3,7 @@ use lasso::Spur;
 
 use crate::{make_ids, source::CodeSpan};
 
-use super::{opcodes::VarID, proto::BlockID};
+use super::{opcodes::Register, proto::BlockID};
 
 make_ids! {
     ScopeID: u32;
@@ -12,14 +12,14 @@ make_ids! {
 #[derive(Debug, Clone, Copy)]
 pub struct VarData {
     pub def_span: CodeSpan,
-    pub id: VarID,
+    pub reg: Register,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum ScopeType {
     File,
     Normal,
-    Loop(BlockID),
+    Loop(BlockID, Register),
     FuncBody,
 }
 
