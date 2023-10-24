@@ -1,11 +1,6 @@
 
 
-let a = 0;
-let b = 1;
-dbg while a < 10000 {
-    dbg a;
-    let c = a + b;
-    a = b;
-    b = c;
-    5
+let (a, b) = (0, 1);
+while a < 10000 {
+    (a, b) = (b, b + dbg a);
 }

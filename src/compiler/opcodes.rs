@@ -145,6 +145,17 @@ pub enum Opcode {
     },
 
     Dbg(Register),
+
+    UnwrapArray {
+        v: Register,
+        start: Register,
+        len: u16,
+    },
+    UnwrapTuple {
+        v: Register,
+        start: Register,
+        len: u16,
+    },
     // UnwrapArray(u16),
     // UnwrapTuple(u16),
 

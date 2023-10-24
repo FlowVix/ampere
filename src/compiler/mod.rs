@@ -123,18 +123,32 @@ impl<'a> Compiler<'a> {
                 builder.push_raw_opcode(Opcode::CopyDeep(reg, var.reg), pat.span);
             }
             LetPatternType::ArrayDestructure(pats) => {
-                todo!()
-                // builder.push_raw_opcode(Opcode::UnwrapArray(pats.len() as u16), pat.span);
-                // for pat in pats.iter().rev() {
-                //     self.do_let(pat, builder, scope)?;
-                // }
+                let regs = (0..pats.len()).map(|_| builder.next_reg()).collect_vec();
+                builder.push_raw_opcode(
+                    Opcode::UnwrapArray {
+                        v: reg,
+                        start: regs[0],
+                        len: pats.len() as u16,
+                    },
+                    pat.span,
+                );
+                for (i, pat) in pats.iter().enumerate() {
+                    self.do_let(pat, regs[i], builder, scope)?
+                }
             }
             LetPatternType::TupleDestructure(pats) => {
-                todo!()
-                // builder.push_raw_opcode(Opcode::UnwrapTuple(pats.len() as u16), pat.span);
-                // for pat in pats.iter().rev() {
-                //     self.do_let(pat, builder, scope)?;
-                // }
+                let regs = (0..pats.len()).map(|_| builder.next_reg()).collect_vec();
+                builder.push_raw_opcode(
+                    Opcode::UnwrapTuple {
+                        v: reg,
+                        start: regs[0],
+                        len: pats.len() as u16,
+                    },
+                    pat.span,
+                );
+                for (i, pat) in pats.iter().enumerate() {
+                    self.do_let(pat, regs[i], builder, scope)?
+                }
             }
         }
         Ok(())
@@ -161,18 +175,32 @@ impl<'a> Compiler<'a> {
                 }
             },
             AssignPatternType::ArrayDestructure(pats) => {
-                todo!()
-                // builder.push_raw_opcode(Opcode::UnwrapArray(pats.len() as u16), pat.span);
-                // for pat in pats.iter().rev() {
-                //     self.do_assign(pat, builder, scope)?;
-                // }
+                let regs = (0..pats.len()).map(|_| builder.next_reg()).collect_vec();
+                builder.push_raw_opcode(
+                    Opcode::UnwrapArray {
+                        v: reg,
+                        start: regs[0],
+                        len: pats.len() as u16,
+                    },
+                    pat.span,
+                );
+                for (i, pat) in pats.iter().enumerate() {
+                    self.do_assign(pat, regs[i], builder, scope)?
+                }
             }
             AssignPatternType::TupleDestructure(pats) => {
-                todo!()
-                // builder.push_raw_opcode(Opcode::UnwrapTuple(pats.len() as u16), pat.span);
-                // for pat in pats.iter().rev() {
-                //     self.do_assign(pat, builder, scope)?;
-                // }
+                let regs = (0..pats.len()).map(|_| builder.next_reg()).collect_vec();
+                builder.push_raw_opcode(
+                    Opcode::UnwrapTuple {
+                        v: reg,
+                        start: regs[0],
+                        len: pats.len() as u16,
+                    },
+                    pat.span,
+                );
+                for (i, pat) in pats.iter().enumerate() {
+                    self.do_assign(pat, regs[i], builder, scope)?
+                }
             }
         }
         Ok(())

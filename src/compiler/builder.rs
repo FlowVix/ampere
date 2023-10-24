@@ -27,6 +27,9 @@ impl<'a> CodeBuilder<'a> {
         self.current_func().reg_count += 1;
         v
     }
+    pub fn peek_next_reg(&mut self) -> Register {
+        self.current_func().reg_count.into()
+    }
 
     pub fn new_func<F>(&mut self, f: F, span: CodeSpan) -> CompileResult<FuncID>
     where

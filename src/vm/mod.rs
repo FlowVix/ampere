@@ -249,6 +249,44 @@ impl Vm {
                 Opcode::Dbg(reg) => {
                     let v = regs.get_reg_key(reg);
                     println!("{}", self.value_str(v, true),)
+                }
+                o @ (Opcode::UnwrapArray { v, start, len }
+                | Opcode::UnwrapTuple { v, start, len }) => {
+                    let v = regs.get_reg_key(v);
+                    match (
+                        &self.memory[v].value,
+                        matches!(o, Opcode::UnwrapTuple { .. }),
+                    ) {
+                        (Value::Array(arr), false) | (Value::Tuple(arr), true) => {
+                            if arr.len() != len as usize {
+                                return Err(RuntimeError::DestructureLenMismatch {
+                                    expected: len as usize,
+                                    found: arr.len(),
+                                    val_area: self.memory[v].def_area.clone(),
+                                    area: opcode!(Area),
+                                });
+                            }
+                            let arr = arr.clone();
+                            for i in 0..len {
+                                let v = self.deep_clone_stored(arr[i as usize]);
+                                regs.set_reg((*start + i).into(), v, self)
+                            }
+                        }
+                        (_, t) => {
+                            return Err(RuntimeError::TypeMismatch {
+                                v: (
+                                    self.memory[v].value.get_type(),
+                                    self.memory[v].def_area.clone(),
+                                ),
+                                expected: if t {
+                                    ValueType::Tuple
+                                } else {
+                                    ValueType::Array
+                                },
+                                area: opcode!(Area),
+                            })
+                        }
+                    }
                 } // o @ (Opcode::UnwrapArray(len) | Opcode::UnwrapTuple(len)) => {
                   //     let top = self.pop();
                   //     let top = self.get(top);
