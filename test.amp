@@ -1,6 +1,8 @@
 
+let g = 0;
+let f = (x) => {
+    g = g + x;
+    dbg g;
+};
 
-let (a, b) = (0, 1);
-while a < 10000 {
-    (a, b) = (b, b + dbg a);
-}
+dbg f(2);

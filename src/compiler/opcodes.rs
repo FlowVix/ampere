@@ -49,6 +49,7 @@ macro_rules! make_ids {
 
 make_ids! {
     ConstID: u16;
+    CallExprID: u16;
     OpcodePos: u16;
     Register: u16;
 }
@@ -156,13 +157,22 @@ pub enum Opcode {
         start: Register,
         len: u16,
     },
-    // UnwrapArray(u16),
-    // UnwrapTuple(u16),
 
-    // PushFunc(FuncID),
-    // SetArgAmount(u16),
-    // SetArgType(u16),
-    // SetReturnType,
+    CreateFunc {
+        id: FuncID,
+        arg_amount: u16,
+        reg: Register,
+    },
+    SetArgType {
+        func: Register,
+        typ: Register,
+        arg: u16,
+    },
+    SetReturnType {
+        func: Register,
+        typ: Register,
+    },
+    Call(CallExprID),
 
-    // Call(u16),
+    Return(Register),
 }

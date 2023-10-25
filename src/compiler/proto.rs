@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
     builder::CodeBuilder,
-    bytecode::{Bytecode, Constant},
+    bytecode::{Bytecode, CallExpr, Constant},
     opcodes::{Opcode, Register},
     CompileResult,
 };
@@ -72,6 +72,8 @@ pub type Block = Vec<BlockContent>;
 #[derive(Debug)]
 pub struct ProtoBytecode {
     pub consts: UniqueRegister<Constant>,
+    pub call_exprs: UniqueRegister<CallExpr>,
+
     pub functions: Vec<ProtoFunc>,
     pub blocks: SlabMap<BlockID, Block>,
 }
@@ -100,7 +102,8 @@ impl ProtoBytecode {
     pub fn build(mut self, src: &Rc<AmpereSource>) -> Bytecode {
         type BlockPos = (u16, u16);
 
-        let constants = self.consts.make_vec();
+        let consts = self.consts.make_vec();
+        let call_exprs = self.call_exprs.make_vec();
 
         let mut funcs: Vec<Function> = vec![];
 
@@ -184,7 +187,8 @@ impl ProtoBytecode {
         }
 
         Bytecode {
-            constants: constants.into(),
+            consts: consts.into(),
+            call_exprs: call_exprs.into(),
             funcs: funcs.into(),
             src: src.clone(),
         }

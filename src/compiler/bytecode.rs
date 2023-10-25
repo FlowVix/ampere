@@ -30,6 +30,13 @@ impl Hash for Constant {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CallExpr {
+    pub args: ImmutVec<Register>,
+    pub base: Register,
+    pub ret: Register,
+}
+
 pub struct Function {
     pub opcodes: ImmutVec<Opcode>,
     pub reg_count: u16,
@@ -38,7 +45,9 @@ pub struct Function {
 }
 
 pub struct Bytecode {
-    pub constants: ImmutVec<Constant>,
+    pub consts: ImmutVec<Constant>,
+    pub call_exprs: ImmutVec<CallExpr>,
+
     pub funcs: ImmutVec<Function>,
     pub src: Rc<AmpereSource>,
 }
@@ -47,7 +56,7 @@ impl Bytecode {
     pub fn display(&self) {
         println!(
             "Constants: {}\n",
-            self.constants
+            self.consts
                 .iter()
                 .map(|v| format!("{:?}", v).bright_green())
                 .join(", ")

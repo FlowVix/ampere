@@ -72,11 +72,14 @@ fn main() {
         memory: SlabMap::new(),
     };
     println!("{}", "------------------------------".dimmed());
-    match vm.run_func(RunInfo {
-        program: &program,
-        bytecode_idx: 0,
-        func_idx: 0,
-    }) {
+    match vm.run_func(
+        RunInfo {
+            program: &program,
+            bytecode_idx: 0,
+            func_idx: 0,
+        },
+        |_, _| {},
+    ) {
         Ok(_) => {
             // println!(
             //     "{} {}",

@@ -5,7 +5,7 @@ use itertools::Itertools;
 
 use crate::{
     compiler::{
-        bytecode::{Bytecode, Constant, Function},
+        bytecode::{Bytecode, CallExpr, Constant, Function},
         opcodes::{Opcode, Register},
     },
     source::{AmpereSource, CodeArea, CodeSpan},
@@ -91,8 +91,12 @@ impl<'a> RunInfo<'a> {
         &self.bytecode().src
     }
     #[inline]
-    pub fn constants(&self) -> &[Constant] {
-        &self.bytecode().constants
+    pub fn consts(&self) -> &[Constant] {
+        &self.bytecode().consts
+    }
+    #[inline]
+    pub fn call_exprs(&self) -> &[CallExpr] {
+        &self.bytecode().call_exprs
     }
 }
 
@@ -139,17 +143,11 @@ impl Vm {
         let v = self.deep_clone_stored(k);
         self.store_value(v)
     }
-    pub fn new_var_vec(&mut self, len: usize, info: RunInfo) -> Vec<MemKey> {
-        std::iter::from_fn(|| {
-            Some(self.store_value(
-                Value::unit().into_stored(CodeSpan::ZEROSPAN.into_area(info.src().clone())),
-            ))
-        })
-        .take(len)
-        .collect()
-    }
 
-    pub fn run_func(&mut self, info: RunInfo) -> RuntimeResult<()> {
+    pub fn run_func<F>(&mut self, info: RunInfo, cb: F) -> RuntimeResult<MemKey>
+    where
+        F: FnOnce(&mut Registers, &mut Self),
+    {
         let mut pos = 0;
 
         macro_rules! opcode {
@@ -161,6 +159,7 @@ impl Vm {
             };
         }
         let mut regs = Registers::new(info.func().reg_count as usize, self, info);
+        cb(&mut regs, self);
 
         macro_rules! bin_op {
             ($fn:ident => $a:ident, $b:ident, $to: ident) => {{
@@ -177,8 +176,7 @@ impl Vm {
                 Opcode::LoadConst(v, to) => {
                     regs.set_reg(
                         to,
-                        Value::from_const(&info.constants()[*v as usize])
-                            .into_stored(opcode!(Area)),
+                        Value::from_const(&info.consts()[*v as usize]).into_stored(opcode!(Area)),
                         self,
                     );
                 }
@@ -287,91 +285,70 @@ impl Vm {
                             })
                         }
                     }
-                } // o @ (Opcode::UnwrapArray(len) | Opcode::UnwrapTuple(len)) => {
-                  //     let top = self.pop();
-                  //     let top = self.get(top);
+                }
+                Opcode::CreateFunc {
+                    id,
+                    arg_amount,
+                    reg,
+                } => {
+                    regs.set_reg(
+                        reg,
+                        Value::Function {
+                            func: id,
+                            param_types: vec![None; arg_amount as usize],
+                            ret_type: None,
+                            captured: info.bytecode().funcs[*id as usize]
+                                .captured
+                                .iter()
+                                .map(|(from, _)| regs.get_reg_key(*from))
+                                .collect(),
+                        }
+                        .into_stored(opcode!(Area)),
+                        self,
+                    );
+                }
+                Opcode::SetArgType { func, typ, arg } => {
+                    let t = regs.get_reg_key(typ);
+                    if let Value::Function { param_types, .. } =
+                        &mut regs.get_reg_mut(func, self).value
+                    {
+                        param_types[arg as usize] = Some(t);
+                    }
+                }
+                Opcode::SetReturnType { func, typ } => {
+                    let t = regs.get_reg_key(typ);
+                    if let Value::Function { ret_type, .. } =
+                        &mut regs.get_reg_mut(func, self).value
+                    {
+                        *ret_type = Some(t);
+                    }
+                }
+                Opcode::Call(v) => {
+                    let call_expr = &info.call_exprs()[*v as usize];
+                    let k = self.call_value(&regs, call_expr, opcode!(Area), info)?;
+                    regs.set_reg(call_expr.ret, self.get(k).clone(), self);
+                }
+                Opcode::Return(reg) => return Ok(regs.get_reg_key(reg)),
+                // Opcode::Call(args) => {
+                //     // let mut v = vec![0.into(); args as usize];
 
-                  //     match (&top.value, matches!(o, Opcode::UnwrapTuple(_))) {
-                  //         (Value::Array(v), false) | (Value::Tuple(v), true) => {
-                  //             if v.len() != len as usize {
-                  //                 return Err(RuntimeError::DestructureLenMismatch {
-                  //                     expected: len as usize,
-                  //                     found: v.len(),
-                  //                     val_area: top.def_area.clone(),
-                  //                     area: opcode!(Area),
-                  //                 });
-                  //             }
-                  //             for i in v.clone() {
-                  //                 self.push_key(i)
-                  //             }
-                  //         }
-                  //         (_, t) => {
-                  //             return Err(RuntimeError::TypeMismatch {
-                  //                 v: (top.value.get_type(), top.def_area.clone()),
-                  //                 expected: if t {
-                  //                     ValueType::Tuple
-                  //                 } else {
-                  //                     ValueType::Array
-                  //                 },
-                  //                 area: opcode!(Area),
-                  //             })
-                  //         }
-                  //     };
-                  // }
-                  // Opcode::PushFunc(id) => {
-                  //     self.push_value(
-                  //         Value::Function {
-                  //             func: id,
-                  //             param_types: vec![],
-                  //             ret_type: None,
-                  //             captured: info.bytecode().funcs[*id as usize]
-                  //                 .captured
-                  //                 .iter()
-                  //                 .map(|(from, _)| vars[**from as usize])
-                  //                 .collect(),
-                  //         }
-                  //         .into_stored(opcode!(Area)),
-                  //     );
-                  // }
-                  // Opcode::SetArgAmount(n) => {
-                  //     if let Value::Function { param_types, .. } =
-                  //         &mut self.get_mut(self.last()).value
-                  //     {
-                  //         *param_types = vec![None; n as usize]
-                  //     };
-                  // }
-                  // Opcode::SetArgType(arg) => {
-                  //     let t = self.pop();
-                  //     if let Value::Function { param_types, .. } =
-                  //         &mut self.get_mut(self.last()).value
-                  //     {
-                  //         param_types[arg as usize] = Some(t)
-                  //     };
-                  // }
-                  // Opcode::SetReturnType => {
-                  //     let t = self.pop();
-                  //     if let Value::Function { ret_type, .. } = &mut self.get_mut(self.last()).value {
-                  //         *ret_type = Some(t)
-                  //     };
-                  // }
-                  // Opcode::Call(args) => {
-                  //     // let mut v = vec![0.into(); args as usize];
+                //     // for i in (0..args).rev() {
+                //     //     let k = self.pop();
+                //     //     v[i as usize] = k;
+                //     // }
 
-                  //     // for i in (0..args).rev() {
-                  //     //     let k = self.pop();
-                  //     //     v[i as usize] = k;
-                  //     // }
+                //     // let base = self.pop();
 
-                  //     // let base = self.pop();
-
-                  //     self.call_value(args as usize, opcode!(Area), info)?;
-                  // }
+                //     self.call_value(args as usize, opcode!(Area), info)?;
+                // }
             }
 
             pos += 1;
         }
 
-        Ok(())
+        Ok(self.store_value(
+            Value::unit().into_stored(CodeSpan::ZEROSPAN.into_area(info.src().clone())),
+        ))
     }
 
     pub fn value_str(&self, k: MemKey, debug: bool) -> String {
@@ -418,72 +395,60 @@ impl Vm {
         format!("{}{}", s, format!("::k{:?}", k.0).dimmed())
     }
 
-    // pub fn call_value(
-    //     &mut self,
-    //     arg_amount: usize,
-    //     call_area: CodeArea,
-    //     info: RunInfo,
-    // ) -> RuntimeResult<()> {
-    //     // {
-    //     //     let l = self.stack.len();
-    //     //     self.stack[(l - 1 - arg_amount)..].rotate_left(1);
-    //     // }
-    //     // self.stack.remo
+    pub fn call_value(
+        &mut self,
+        regs: &Registers,
+        call_expr: &CallExpr,
+        call_area: CodeArea,
+        info: RunInfo,
+    ) -> RuntimeResult<MemKey> {
+        let base = regs.get_reg(call_expr.base, self);
+        match &base.value {
+            Value::Function {
+                func,
+                param_types,
+                ret_type,
+                captured,
+            } => {
+                if call_expr.args.len() != param_types.len() {
+                    return Err(RuntimeError::IncorrectArgAmount {
+                        expected: param_types.len(),
+                        found: call_expr.args.len(),
+                        val_area: base.def_area.clone(),
+                        area: call_area,
+                    });
+                }
+                let func = *func;
+                let captured = captured.clone();
+                let new_info = RunInfo {
+                    func_idx: *func as usize,
+                    ..info
+                };
 
-    //     let base = self.stack.remove(self.stack.len() - 1 - arg_amount);
-    //     let base = &self.memory[base];
-    //     match &base.value {
-    //         Value::Function {
-    //             func,
-    //             param_types,
-    //             ret_type,
-    //             captured,
-    //         } => {
-    //             if arg_amount != param_types.len() {
-    //                 return Err(RuntimeError::IncorrectArgAmount {
-    //                     expected: param_types.len(),
-    //                     found: arg_amount,
-    //                     val_area: base.def_area.clone(),
-    //                     area: call_area,
-    //                 });
-    //             }
-    //             let func = *func;
-    //             let captured = captured.clone();
-    //             let new_info = RunInfo {
-    //                 func_idx: *func as usize,
-    //                 ..info
-    //             };
-
-    //             let mut vars = self.new_var_vec(new_info.func().var_count as usize, new_info);
-    //             for (k, (_, to)) in captured.iter().zip(new_info.func().captured.iter()) {
-    //                 vars[**to as usize] = *k;
-    //             }
-
-    //             self.run_func(
-    //                 RunInfo {
-    //                     func_idx: *func as usize,
-    //                     ..info
-    //                 },
-    //                 Some(vars),
-    //             )?;
-    //         }
-    //         // Value::Type(t) => {
-    //         //     if arg_amount != param_types.len() {
-    //         //         return Err(RuntimeError::IncorrectArgAmount {
-    //         //             expected: param_types.len(),
-    //         //             found: arg_amount,
-    //         //             val_area: base.def_area.clone(),
-    //         //             area: call_area,
-    //         //         });
-    //         //     }
-    //         // }
-    //         _ => {
-    //             return Err(RuntimeError::CannotCall {
-    //                 v: (base.value.get_type(), base.def_area.clone()),
-    //                 area: call_area,
-    //             })
-    //         }
-    //     }
-    //     Ok(())
-    // }
+                self.run_func(new_info, |new_regs, vm| {
+                    for (idx, r) in call_expr.args.iter().enumerate() {
+                        let v = vm.deep_clone_stored(regs.get_reg_key(*r));
+                        new_regs.set_reg(idx.into(), v, vm);
+                    }
+                    for (k, (_, to)) in captured.iter().zip(new_info.func().captured.iter()) {
+                        new_regs.change_reg_key(*to, *k);
+                    }
+                })
+            }
+            // Value::Type(t) => {
+            //     if arg_amount != param_types.len() {
+            //         return Err(RuntimeError::IncorrectArgAmount {
+            //             expected: param_types.len(),
+            //             found: arg_amount,
+            //             val_area: base.def_area.clone(),
+            //             area: call_area,
+            //         });
+            //     }
+            // }
+            _ => Err(RuntimeError::CannotCall {
+                v: (base.value.get_type(), base.def_area.clone()),
+                area: call_area,
+            }),
+        }
+    }
 }

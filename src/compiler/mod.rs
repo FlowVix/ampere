@@ -5,6 +5,7 @@ use itertools::Itertools;
 use lasso::{Rodeo, Spur};
 
 use crate::{
+    compiler::bytecode::CallExpr,
     parser::{
         ast::{
             AssignPatternNode, AssignPatternType, ExprNode, ExprType, LetPatternNode,
@@ -277,12 +278,23 @@ impl<'a> Compiler<'a> {
             ExprType::Member { base, member } => todo!(),
             ExprType::Associated { base, member } => todo!(),
             ExprType::Call { base, args } => {
-                todo!()
-                // self.compile_expr(base, builder, scope)?;
-                // for i in args {
-                //     self.compile_expr(i, builder, scope)?;
-                // }
-                // builder.push_raw_opcode(Opcode::Call(args.len() as u16), expr.span);
+                let base_reg = self.compile_expr(base, builder, scope)?;
+                let mut arg_regs = Vec::with_capacity(args.len());
+                for i in args {
+                    arg_regs.push(self.compile_expr(i, builder, scope)?);
+                }
+                let out = builder.next_reg();
+
+                builder.call(
+                    CallExpr {
+                        args: arg_regs.into(),
+                        base: base_reg,
+                        ret: out,
+                    },
+                    expr.span,
+                );
+
+                out
             }
             ExprType::Array(v) => {
                 let out = builder.next_reg();
@@ -364,48 +376,68 @@ impl<'a> Compiler<'a> {
                 ret_type,
                 body,
             } => {
-                todo!()
-                // let mut captured_names = AHashMap::new();
-                // self.for_accessible_vars(scope, &mut |name, data| {
-                //     captured_names.insert(name, data);
-                // });
+                let mut captured_names = AHashMap::new();
+                self.for_accessible_vars(scope, &mut |name, data| {
+                    captured_names.insert(name, data);
+                });
 
-                // let id = builder.new_func(
-                //     |builder| {
-                //         let func_scope = self.scopes.insert(Scope {
-                //             vars: AHashMap::new(),
-                //             parent: None,
-                //             typ: ScopeType::FuncBody,
-                //         });
-                //         let mut captured_map = vec![];
+                let id = builder.new_func(
+                    |builder| {
+                        let func_scope = self.scopes.insert(Scope {
+                            vars: AHashMap::new(),
+                            parent: None,
+                            typ: ScopeType::FuncBody,
+                        });
+                        let mut captured_map = vec![];
+                        for _ in 0..params.len() {
+                            builder.next_reg();
+                        }
 
-                //         for (name, data) in captured_names {
-                //             let new_id = self.new_var(name, data.def_span, func_scope, builder);
-                //             captured_map.push((data.id, new_id));
-                //         }
+                        for (idx, (pat, _)) in params.iter().enumerate() {
+                            self.do_let(pat, idx.into(), builder, func_scope)?;
+                        }
 
-                //         for (pat, _) in params.iter().rev() {
-                //             self.do_let(pat, builder, func_scope)?;
-                //         }
+                        for (name, data) in captured_names {
+                            let new_var = self.new_var(name, data.def_span, func_scope, builder);
+                            captured_map.push((data.reg, new_var.reg));
+                        }
 
-                //         self.compile_expr(body, builder, func_scope)?;
+                        self.compile_expr(body, builder, func_scope)?;
 
-                //         Ok(captured_map)
-                //     },
-                //     expr.span,
-                // )?;
-                // builder.push_raw_opcode(Opcode::PushFunc(id), expr.span);
-                // builder.push_raw_opcode(Opcode::SetArgAmount(params.len() as u16), expr.span);
-                // for (idx, (_, t)) in params.iter().enumerate() {
-                //     if let Some(t) = t {
-                //         self.compile_expr(t, builder, scope)?;
-                //         builder.push_raw_opcode(Opcode::SetArgType(idx as u16), t.span);
-                //     }
-                // }
-                // if let Some(t) = ret_type {
-                //     self.compile_expr(t, builder, scope)?;
-                //     builder.push_raw_opcode(Opcode::SetReturnType, t.span);
-                // }
+                        Ok(captured_map)
+                    },
+                    expr.span,
+                )?;
+
+                let out = builder.next_reg();
+
+                builder.push_raw_opcode(
+                    Opcode::CreateFunc {
+                        id,
+                        arg_amount: params.len() as u16,
+                        reg: out,
+                    },
+                    expr.span,
+                );
+                for (idx, (_, t)) in params.iter().enumerate() {
+                    if let Some(t) = t {
+                        let typ = self.compile_expr(t, builder, scope)?;
+                        builder.push_raw_opcode(
+                            Opcode::SetArgType {
+                                func: out,
+                                typ,
+                                arg: idx as u16,
+                            },
+                            t.span,
+                        );
+                    }
+                }
+                if let Some(t) = ret_type {
+                    let typ = self.compile_expr(t, builder, scope)?;
+                    builder.push_raw_opcode(Opcode::SetReturnType { func: out, typ }, t.span);
+                }
+
+                out
             }
             ExprType::Dbg(v) => {
                 let out = self.compile_expr(v, builder, scope)?;
@@ -522,6 +554,7 @@ impl<'a> Compiler<'a> {
 
         let mut code = ProtoBytecode {
             consts: UniqueRegister::new(),
+            call_exprs: UniqueRegister::new(),
             functions: vec![],
             blocks: SlabMap::new(),
         };

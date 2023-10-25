@@ -1,7 +1,7 @@
 use crate::source::CodeSpan;
 
 use super::{
-    bytecode::Constant,
+    bytecode::{CallExpr, Constant},
     opcodes::{Opcode, Register},
     proto::{
         Block, BlockContent, BlockID, FuncID, JumpType, ProtoBytecode, ProtoFunc, ProtoOpcode,
@@ -68,6 +68,10 @@ impl<'a> CodeBuilder<'a> {
     pub fn load_const(&mut self, c: Constant, to: Register, span: CodeSpan) {
         let id = self.proto_bytecode.consts.insert(c).into();
         self.push_opcode(ProtoOpcode::Raw(Opcode::LoadConst(id, to)), span)
+    }
+    pub fn call(&mut self, c: CallExpr, span: CodeSpan) {
+        let id = self.proto_bytecode.call_exprs.insert(c).into();
+        self.push_opcode(ProtoOpcode::Raw(Opcode::Call(id)), span)
     }
 
     fn push_opcode(&mut self, opcode: ProtoOpcode, span: CodeSpan) {
