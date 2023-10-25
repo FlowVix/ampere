@@ -1,8 +1,5 @@
 
-let g = 0;
-let f = (x) => {
-    g = g + x;
-    dbg g;
-};
 
-dbg f(2);
+
+let x = 3;
+// bruh

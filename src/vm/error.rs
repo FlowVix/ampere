@@ -122,7 +122,7 @@ impl RuntimeError {
                     ),
                     (
                         val_area,
-                        special_fmt!("Function defined to take {} arguments here", found),
+                        special_fmt!("Function defined to take {} arguments here", expected),
                     ),
                 ],
             ),

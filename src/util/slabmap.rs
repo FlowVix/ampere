@@ -42,7 +42,6 @@ where
         self.slab.insert(val).into()
     }
     pub fn remove(&mut self, k: K) -> Option<V> {
-        // println!("remove {:?}", k);
         self.slab.try_remove(k.into())
     }
     pub fn len(&mut self) -> usize {

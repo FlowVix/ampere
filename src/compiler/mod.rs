@@ -402,7 +402,8 @@ impl<'a> Compiler<'a> {
                             captured_map.push((data.reg, new_var.reg));
                         }
 
-                        self.compile_expr(body, builder, func_scope)?;
+                        let out = self.compile_expr(body, builder, func_scope)?;
+                        builder.push_raw_opcode(Opcode::Return(out), body.span);
 
                         Ok(captured_map)
                     },
@@ -444,7 +445,18 @@ impl<'a> Compiler<'a> {
                 builder.push_raw_opcode(Opcode::Dbg(out), expr.span);
                 out
             }
-            ExprType::Return(_) => todo!(),
+            ExprType::Return(v) => {
+                let out = if let Some(v) = v {
+                    self.compile_expr(v, builder, scope)?
+                } else {
+                    let out = builder.next_reg();
+
+                    builder.push_raw_opcode(Opcode::LoadUnit(out), expr.span);
+                    out
+                };
+                builder.push_raw_opcode(Opcode::Return(out), expr.span);
+                out
+            }
             ExprType::Break(v) => {
                 if let Some((block, reg)) = self.get_loop(scope) {
                     if let Some(v) = v {

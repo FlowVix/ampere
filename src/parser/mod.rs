@@ -507,7 +507,6 @@ impl<'a> Parser<'a> {
 
                 match self.parse_assign_pattern() {
                     Ok(pat) => {
-                        println!("ga");
                         let tok = self.peek()?;
                         if tok == Token::Assign {
                             self.next()?;
