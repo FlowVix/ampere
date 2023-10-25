@@ -106,6 +106,16 @@ impl<'a> Lexer<'a> {
                     self.next_char();
                     Ok(Some(Token::DivEq))
                 }
+                Some('/') => loop {
+                    match self.chars.next() {
+                        Some((idx, '\n')) => {
+                            self.span.start = idx;
+                            return self.next_token();
+                        }
+                        None => return Ok(None),
+                        _ => {}
+                    }
+                },
                 _ => Ok(Some(Token::Div)),
             },
             Some('%') => match self.peek_char() {
