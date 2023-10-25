@@ -72,6 +72,8 @@ tokens! {
     Break: "break",
     Continue: "continue",
 
+    Import: "import",
+
     Let: "let",
 
     Dbg: "dbg",

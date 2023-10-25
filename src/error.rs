@@ -49,7 +49,7 @@ impl ErrorReport {
         for (area, msg) in self.labels {
             src_map
                 .entry(area.src.name())
-                .or_insert_with(|| (area.src.read(), vec![]))
+                .or_insert_with(|| (area.src.read().unwrap(), vec![]))
                 .1
                 .push((area.span, msg));
         }

@@ -55,6 +55,12 @@ pub struct Bytecode {
 impl Bytecode {
     pub fn display(&self) {
         println!(
+            "{}",
+            format!("================ {:?} ================", self.src)
+                .bright_green()
+                .bold()
+        );
+        println!(
             "Constants: {}\n",
             self.consts
                 .iter()

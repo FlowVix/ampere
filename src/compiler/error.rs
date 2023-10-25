@@ -1,6 +1,7 @@
 use crate::{
     error::ErrorReport,
     lexer::{error::LexerError, tokens::Token},
+    parser::error::ParserError,
     source::CodeArea,
     special_fmt,
 };
@@ -10,6 +11,7 @@ pub enum CompilerError {
     NonexistentVariable(String, CodeArea),
     BreakOutsideLoop(CodeArea),
     ContinueOutsideLoop(CodeArea),
+    ImportParseError(CodeArea, ParserError),
     // InvalidBinaryOperands {
     //     a: (ValueType, CodeArea),
     //     b: (ValueType, CodeArea),
@@ -48,6 +50,13 @@ impl CompilerError {
                 "Continue used outside of loop",
                 vec![(area, "This continue was used outside of a loop".into())],
             ),
+            CompilerError::ImportParseError(area, err) => {
+                let mut labels = vec![(area.clone(), "Import occured here".into())];
+
+                labels.extend(err.into_report().labels);
+
+                ("Error parsing import", labels)
+            }
         };
 
         ErrorReport {

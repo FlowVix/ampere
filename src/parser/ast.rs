@@ -65,6 +65,8 @@ pub enum ExprType {
     Return(Option<Box<ExprNode>>),
     Break(Option<Box<ExprNode>>),
     Continue(Option<Box<ExprNode>>),
+
+    Import(Spur),
 }
 
 #[derive(Debug, Clone, PartialEq)]

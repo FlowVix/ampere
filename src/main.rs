@@ -7,6 +7,7 @@ use std::{
     rc::Rc,
 };
 
+use ahash::AHashMap;
 use colored::Colorize;
 use itertools::Itertools;
 use lasso::Rodeo;
@@ -15,9 +16,9 @@ use lexer::Lexer;
 use parser::Parser;
 
 use crate::{
-    compiler::Compiler,
+    compiler::{Compiler, SourceMap},
     util::slabmap::SlabMap,
-    vm::{RunInfo, Vm},
+    vm::{dummy, Registers, RunInfo, Vm},
 };
 
 mod compiler;
@@ -38,7 +39,7 @@ fn main() {
     let src = source::AmpereSource::File(PathBuf::from("test.amp"));
     let src = Rc::new(src);
 
-    let code = src.read();
+    let code = src.read().unwrap();
     let lexer = Lexer::new(&code);
     let mut parser = Parser::new(lexer, &src, &mut interner);
 
@@ -53,12 +54,17 @@ fn main() {
         }
     };
 
-    let code = match Compiler::new_compile_file(&stmts, &src, &mut interner, (0..code.len()).into())
-    {
+    let mut src_map = SourceMap::new();
+
+    match Compiler::new_compile_file(
+        &stmts,
+        &src,
+        &mut interner,
+        &mut src_map,
+        (0..code.len()).into(),
+    ) {
         Ok(c) => {
-            let b = c.build(&src);
-            b.display();
-            b
+            src_map.insert(src.clone(), c.build(&src));
         }
         Err(err) => {
             err.into_report().display();
@@ -66,7 +72,15 @@ fn main() {
         }
     };
 
-    let program = vec![code].into();
+    let program = src_map
+        .into_iter()
+        .map(|(_, b)| b)
+        .collect_vec()
+        .into_boxed_slice();
+
+    for code in program.iter() {
+        code.display();
+    }
 
     let mut vm = Vm {
         memory: SlabMap::new(),
@@ -75,10 +89,10 @@ fn main() {
     match vm.run_func(
         RunInfo {
             program: &program,
-            bytecode_idx: 0,
+            bytecode_idx: program.len() - 1,
             func_idx: 0,
         },
-        |_, _| {},
+        dummy,
     ) {
         Ok(_) => {
             // println!(

@@ -1,17 +1,20 @@
-use std::rc::Rc;
+use std::{collections::BTreeMap, rc::Rc};
 
 use ahash::AHashMap;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use lasso::{Rodeo, Spur};
 
 use crate::{
     compiler::bytecode::CallExpr,
+    lexer::Lexer,
     parser::{
         ast::{
             AssignPatternNode, AssignPatternType, ExprNode, ExprType, LetPatternNode,
             LetPatternType, StmtNode, StmtType, Stmts,
         },
         operators::{BinOp, UnaryOp},
+        Parser,
     },
     source::{AmpereSource, CodeArea, CodeSpan},
     util::{slabmap::SlabMap, unique_register::UniqueRegister},
@@ -19,7 +22,7 @@ use crate::{
 
 use self::{
     builder::CodeBuilder,
-    bytecode::Constant,
+    bytecode::{Bytecode, Constant},
     error::CompilerError,
     opcodes::{Opcode, Register},
     proto::{BlockID, JumpType, ProtoBytecode},
@@ -33,19 +36,27 @@ pub mod opcodes;
 pub mod proto;
 pub mod scope;
 
+pub type SourceMap = IndexMap<Rc<AmpereSource>, Bytecode>;
+
 pub struct Compiler<'a> {
     src: &'a Rc<AmpereSource>,
     interner: &'a mut Rodeo,
+    src_map: &'a mut SourceMap,
     scopes: SlabMap<ScopeID, Scope>,
 }
 
 pub type CompileResult<T> = Result<T, CompilerError>;
 
 impl<'a> Compiler<'a> {
-    pub fn new(src: &'a Rc<AmpereSource>, interner: &'a mut Rodeo) -> Self {
+    pub fn new(
+        src: &'a Rc<AmpereSource>,
+        interner: &'a mut Rodeo,
+        src_map: &'a mut SourceMap,
+    ) -> Self {
         Self {
             src,
             interner,
+            src_map,
             scopes: SlabMap::new(),
         }
     }
@@ -274,7 +285,13 @@ impl<'a> Compiler<'a> {
                 }
                 to
             }
-            ExprType::Index { base, index } => todo!(),
+            ExprType::Index { base, index } => {
+                let out = builder.next_reg();
+                let v = self.compile_expr(base, builder, scope)?;
+                let idx = self.compile_expr(index, builder, scope)?;
+                builder.push_raw_opcode(Opcode::Index { v, idx, out }, expr.span);
+                out
+            }
             ExprType::Member { base, member } => todo!(),
             ExprType::Associated { base, member } => todo!(),
             ExprType::Call { base, args } => {
@@ -484,10 +501,62 @@ impl<'a> Compiler<'a> {
 
                     builder.push_jump(Some(block), JumpType::Start, expr.span);
                 } else {
-                    return Err(CompilerError::BreakOutsideLoop(self.make_area(expr.span)));
+                    return Err(CompilerError::ContinueOutsideLoop(
+                        self.make_area(expr.span),
+                    ));
                 }
 
                 builder.next_reg()
+            }
+            ExprType::Import(path) => {
+                let s = self.resolve(path);
+
+                let new_path = match &**self.src {
+                    AmpereSource::File(f) => {
+                        let mut new = f.clone();
+                        new.pop();
+                        new.push(s);
+                        new
+                    }
+                };
+                let new_src = Rc::new(AmpereSource::File(new_path));
+
+                let code = match new_src.read() {
+                    Some(c) => c,
+                    None => todo!(),
+                };
+                let lexer = Lexer::new(&code);
+                let mut parser = Parser::new(lexer, &new_src, self.interner);
+
+                let stmts = match parser.parse() {
+                    Ok(v) => {
+                        // println!("{}", format!("{:#?}", v).bright_green().bold());
+                        v
+                    }
+                    Err(err) => {
+                        return Err(CompilerError::ImportParseError(
+                            self.make_area(expr.span),
+                            err,
+                        ))
+                    }
+                };
+
+                let code = Compiler::new_compile_file(
+                    &stmts,
+                    &new_src,
+                    self.interner,
+                    self.src_map,
+                    (0..code.len()).into(),
+                )?
+                .build(&new_src);
+                self.src_map.insert(new_src.clone(), code);
+
+                let out = builder.next_reg();
+                builder.push_raw_opcode(
+                    Opcode::Import((self.src_map.len() - 1).into(), out),
+                    expr.span,
+                );
+                out
             }
         })
     }
@@ -560,9 +629,10 @@ impl<'a> Compiler<'a> {
         stmts: &Stmts,
         src: &'a Rc<AmpereSource>,
         interner: &'a mut Rodeo,
+        src_map: &'a mut SourceMap,
         span: CodeSpan,
     ) -> CompileResult<ProtoBytecode> {
-        let mut compiler = Self::new(src, interner);
+        let mut compiler = Self::new(src, interner, src_map);
 
         let mut code = ProtoBytecode {
             consts: UniqueRegister::new(),

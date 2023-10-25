@@ -47,14 +47,9 @@ pub enum AmpereSource {
 }
 
 impl AmpereSource {
-    pub fn read(&self) -> String {
+    pub fn read(&self) -> Option<String> {
         match self {
-            AmpereSource::File(path) => {
-                let mut file = File::open(path).unwrap();
-                let mut contents = String::new();
-                file.read_to_string(&mut contents).unwrap();
-                contents
-            }
+            AmpereSource::File(path) => std::fs::read_to_string(path).ok(),
         }
     }
     pub fn name(&self) -> String {

@@ -7,7 +7,7 @@ use crate::source::{AmpereSource, CodeArea, CodeSpan};
 use super::{
     error::RuntimeError,
     memory::MemKey,
-    value::{StoredValue, Value},
+    value::{StoredValue, Value, ValueType},
     RuntimeResult, Vm,
 };
 
@@ -321,4 +321,52 @@ pub fn not_eq(
             area: span.into_area(src.clone()),
         },
     )
+}
+
+pub fn index(
+    vm: &mut Vm,
+    a: MemKey,
+    b: MemKey,
+    span: CodeSpan,
+    src: &Rc<AmpereSource>,
+) -> RuntimeResult<MemKey> {
+    let a = vm.get(a);
+    let b = vm.get(b);
+
+    let index_wrap = |idx: i64, len: usize, typ: ValueType| {
+        let index_calc = if idx >= 0 { idx } else { len as i64 + idx };
+
+        if index_calc < 0 || index_calc >= len as i64 {
+            return Err(RuntimeError::IndexOutOfBounds {
+                len,
+                index: idx,
+                area: span.into_area(src.clone()),
+                typ,
+            });
+        }
+
+        Ok(index_calc as usize)
+    };
+
+    Ok(match (&a.value, &b.value) {
+        (Value::Array(a), Value::Int(b)) => {
+            let idx = index_wrap(*b, a.len(), ValueType::Array)?;
+            a[idx]
+        }
+        (Value::String(a), Value::Int(b)) => {
+            let idx = index_wrap(*b, a.chars().count(), ValueType::String)?;
+            vm.store_value(
+                Value::String(a.chars().nth(idx).unwrap().into())
+                    .into_stored(span.into_area(src.clone())),
+            )
+        }
+        (_, _) => {
+            return Err(RuntimeError::InvalidBinaryOperands {
+                a: (a.value.get_type(), a.def_area.clone()),
+                b: (b.value.get_type(), b.def_area.clone()),
+                op: "/",
+                area: span.into_area(src.clone()),
+            })
+        }
+    })
 }

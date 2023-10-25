@@ -381,6 +381,13 @@ impl<'a> Parser<'a> {
                     };
                     ExprType::Continue(v)
                 }
+                Token::Import => {
+                    self.expect_tok(Token::String)?;
+                    let s = self.slice().to_string();
+                    let s = self.intern(&s[1..(s.len() - 1)]);
+
+                    ExprType::Import(s)
+                }
 
                 unary_op
                     if {

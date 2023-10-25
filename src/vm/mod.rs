@@ -146,7 +146,7 @@ impl Vm {
 
     pub fn run_func<F>(&mut self, info: RunInfo, cb: F) -> RuntimeResult<MemKey>
     where
-        F: FnOnce(&mut Registers, &mut Self),
+        F: FnOnce(&mut Registers, &mut Vm),
     {
         let mut pos = 0;
 
@@ -159,6 +159,7 @@ impl Vm {
             };
         }
         let mut regs = Registers::new(info.func().reg_count as usize, self, info);
+
         cb(&mut regs, self);
 
         macro_rules! bin_op {
@@ -329,18 +330,22 @@ impl Vm {
                     regs.set_reg(call_expr.ret, self.get(k).clone(), self);
                 }
                 Opcode::Return(reg) => return Ok(regs.get_reg_key(reg)),
-                // Opcode::Call(args) => {
-                //     // let mut v = vec![0.into(); args as usize];
+                Opcode::Index { v, idx, out } => {
+                    let v = regs.get_reg_key(v);
+                    let idx = regs.get_reg_key(idx);
+                    let result = value_ops::index(self, v, idx, opcode!(Span), info.src())?;
+                    regs.change_reg_key(out, result);
+                }
+                Opcode::Import(id, out) => {
+                    let new_info = RunInfo {
+                        bytecode_idx: *id as usize,
+                        func_idx: 0,
+                        ..info
+                    };
 
-                //     // for i in (0..args).rev() {
-                //     //     let k = self.pop();
-                //     //     v[i as usize] = k;
-                //     // }
-
-                //     // let base = self.pop();
-
-                //     self.call_value(args as usize, opcode!(Area), info)?;
-                // }
+                    let v = self.run_func(new_info, dummy)?;
+                    regs.change_reg_key(out, v);
+                }
             }
 
             pos += 1;
@@ -425,7 +430,7 @@ impl Vm {
                     ..info
                 };
 
-                self.run_func(new_info, |new_regs, vm| {
+                self.run_func(new_info, |new_regs: &mut Registers, vm: &mut Vm| {
                     for (idx, r) in call_expr.args.iter().enumerate() {
                         let v = vm.deep_clone_stored(regs.get_reg_key(*r));
                         new_regs.set_reg(idx.into(), v, vm);
@@ -452,3 +457,5 @@ impl Vm {
         }
     }
 }
+
+pub fn dummy(_: &mut Registers, _: &mut Vm) {}

@@ -52,6 +52,7 @@ make_ids! {
     CallExprID: u16;
     OpcodePos: u16;
     Register: u16;
+    ImportID: u16;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,4 +176,12 @@ pub enum Opcode {
     Call(CallExprID),
 
     Return(Register),
+
+    Index {
+        v: Register,
+        idx: Register,
+        out: Register,
+    },
+
+    Import(ImportID, Register),
 }

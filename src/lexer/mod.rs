@@ -207,6 +207,7 @@ impl<'a> Lexer<'a> {
                         "continue" => Token::Continue,
                         "let" => Token::Let,
                         "dbg" => Token::Dbg,
+                        "import" => Token::Import,
                         _ => Token::Identifier,
                     }));
                 }

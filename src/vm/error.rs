@@ -41,6 +41,12 @@ pub enum RuntimeError {
         val_area: CodeArea,
         area: CodeArea,
     },
+    IndexOutOfBounds {
+        len: usize,
+        index: i64,
+        area: CodeArea,
+        typ: ValueType,
+    },
 }
 
 impl RuntimeError {
@@ -125,6 +131,23 @@ impl RuntimeError {
                         special_fmt!("Function defined to take {} arguments here", expected),
                     ),
                 ],
+            ),
+            RuntimeError::IndexOutOfBounds {
+                len,
+                index,
+                area,
+                typ,
+            } => (
+                "Index out of bounds",
+                vec![(
+                    area,
+                    special_fmt!(
+                        "Index {} is out of bounds for this {} of length {}",
+                        index,
+                        typ.name(),
+                        len
+                    ),
+                )],
             ),
         };
 
