@@ -521,41 +521,45 @@ impl<'a> Compiler<'a> {
                 };
                 let new_src = Rc::new(AmpereSource::File(new_path));
 
-                let code = match new_src.read() {
-                    Some(c) => c,
-                    None => todo!(),
-                };
-                let lexer = Lexer::new(&code);
-                let mut parser = Parser::new(lexer, &new_src, self.interner);
+                let import_id = match self.src_map.get_index_of(&new_src) {
+                    Some(n) => n.into(),
+                    None => {
+                        let code = match new_src.read() {
+                            Some(c) => c,
+                            None => todo!(),
+                        };
+                        let lexer = Lexer::new(&code);
+                        let mut parser = Parser::new(lexer, &new_src, self.interner);
 
-                let stmts = match parser.parse() {
-                    Ok(v) => {
-                        // println!("{}", format!("{:#?}", v).bright_green().bold());
-                        v
-                    }
-                    Err(err) => {
-                        return Err(CompilerError::ImportParseError(
-                            self.make_area(expr.span),
-                            err,
-                        ))
+                        let stmts = match parser.parse() {
+                            Ok(v) => {
+                                // println!("{}", format!("{:#?}", v).bright_green().bold());
+                                v
+                            }
+                            Err(err) => {
+                                return Err(CompilerError::ImportParseError(
+                                    self.make_area(expr.span),
+                                    err,
+                                ))
+                            }
+                        };
+
+                        let code = Compiler::new_compile_file(
+                            &stmts,
+                            &new_src,
+                            self.interner,
+                            self.src_map,
+                            (0..code.len()).into(),
+                        )?
+                        .build(&new_src);
+                        self.src_map.insert(new_src.clone(), code);
+
+                        (self.src_map.len() - 1).into()
                     }
                 };
-
-                let code = Compiler::new_compile_file(
-                    &stmts,
-                    &new_src,
-                    self.interner,
-                    self.src_map,
-                    (0..code.len()).into(),
-                )?
-                .build(&new_src);
-                self.src_map.insert(new_src.clone(), code);
 
                 let out = builder.next_reg();
-                builder.push_raw_opcode(
-                    Opcode::Import((self.src_map.len() - 1).into(), out),
-                    expr.span,
-                );
+                builder.push_raw_opcode(Opcode::Import(import_id, out), expr.span);
                 out
             }
         })

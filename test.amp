@@ -1,5 +1,6 @@
 
-dbg import "test2.amp";
+import "test2.amp";
+import "test2.amp";
 
 
 
